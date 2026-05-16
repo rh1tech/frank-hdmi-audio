@@ -6,7 +6,7 @@ Raspberry Pi RP2350, packaged as a Pico SDK library. It outputs
 32 kHz stereo PCM in the HDMI data-island stream. No external DAC, 
 no separate audio path.
 
-The TMDS encoding core comes from
+The TMDS encoding core is based on
 [PicoDVI](https://github.com/Wren6991/PicoDVI) by Wren6991, via shuichitakano's
 [PicoDVI-audio](https://github.com/shuichitakano/PicoDVI-audio) fork,
 which adds HDMI data-island audio support. The libdvi integration
@@ -14,6 +14,12 @@ pattern follows
 [pico-zxspectrum](https://github.com/fruit-bat/pico-zxspectrum). This
 library extracts and generalises the HDMI path originally written for
 [frank-snes](https://github.com/rh1tech/frank-snes).
+
+![hello_hdmi test pattern: navy field with a 32-pixel grid, three coloured squares and a marching white block](screenshots/screen1.png)
+
+Captured from the bundled `hello_hdmi` example over an HDMI capture
+card. Audio (440 Hz tone, then a multi-voice melody) is carried in the
+same HDMI stream.
 
 ## What you get
 
@@ -158,8 +164,8 @@ squares and a marching white block, then plays:
 A pre-built UF2 for the M2 board is also checked in at
 `release/hello_hdmi_m2.uf2`.
 
-For a step-by-step walkthrough (toolchain install, configure, flash,                                
-verify, integrate, plus a debugging reference covering every bug the                                
+For a step-by-step walkthrough (toolchain install, configure, flash,
+verify, integrate, plus a debugging reference covering every bug the
 driver hit during bring-up), see [docs/BUILDING.md](docs/BUILDING.md).
 
 For a from-scratch tutorial that builds an app like `hello_hdmi` one
@@ -198,6 +204,15 @@ add_subdirectory(third_party/frank-hdmi-sound)
 Total: ~22 KB main SRAM, ~700 B scratch_y. That leaves plenty of
 room for an application working set on the RP2350's 512 KB.
 
+## Acknowledgements
+
+- [Luke Wren](https://github.com/Wren6991) for PicoDVI.
+- [shuichitakano](https://github.com/shuichitakano) for the
+  PicoDVI-audio fork that adds HDMI data-island audio.
+- [fruit-bat](https://github.com/fruit-bat) and contributors for
+  pico-zxspectrum, whose libdvi integration pattern this driver
+  follows.
+
 ## Licence
 
 The driver source (`src/frank_hdmi.{c,h}`, the example, build system,
@@ -211,15 +226,6 @@ shuichitakano. BSD-3-Clause, Copyright (c) 2021 Luke Wren and
 contributors. Each file carries the BSD notice; local changes are
 tagged `PATCH (frank-hdmi-sound):` so they can be lifted back
 upstream if anyone wants to.
-
-## Acknowledgements
-
-- [Luke Wren](https://github.com/Wren6991) for PicoDVI.
-- [shuichitakano](https://github.com/shuichitakano) for the
-  PicoDVI-audio fork that adds HDMI data-island audio.
-- [fruit-bat](https://github.com/fruit-bat) and contributors for
-  pico-zxspectrum, whose libdvi integration pattern this driver
-  follows.
 
 ## Author
 
