@@ -1,10 +1,5 @@
 # frank-hdmi-sound
 
-Mikhail Matveev <[xtreme@rh1.tech](mailto:xtreme@rh1.tech)>
-[https://rh1.tech](https://rh1.tech) ·
-[GitHub](https://github.com/rh1tech/frank-hdmi-audio) ·
-[FRANK boards](https://frank.rh1.tech)
-
 A small HDMI video and audio driver for the Raspberry Pi RP2350,
 packaged as a Pico SDK library. It outputs 640x480p60 video from a
 320x240 palette-indexed framebuffer and embeds 32 kHz stereo PCM in
@@ -213,3 +208,9 @@ back upstream if anyone wants to.
 - [fruit-bat](https://github.com/fruit-bat) and contributors for
   pico-zxspectrum, whose libdvi integration pattern this driver
   follows.
+
+## Author
+
+Mikhail Matveev <[xtreme@rh1.tech](mailto:xtreme@rh1.tech)>
+
+[https://rh1.tech](https://rh1.tech) | [GitHub](https://github.com/rh1tech/frank-hdmi-audio)
