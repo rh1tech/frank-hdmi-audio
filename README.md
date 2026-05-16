@@ -156,6 +156,10 @@ squares and a marching white block, then plays:
 A pre-built UF2 for the M2 board is also checked in at
 `release/hello_hdmi_m2.uf2`.
 
+For a step-by-step walkthrough (toolchain install, configure, flash,
+verify, integrate, plus a debugging reference covering every bug the
+driver hit during bring-up), see [docs/BUILDING.md](docs/BUILDING.md).
+
 ## System clock
 
 The driver does not change the CPU clock. The vendored libdvi build is
