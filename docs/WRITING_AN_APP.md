@@ -10,8 +10,8 @@ By the end you will have:
   multi-voice melody on loop forever.
 - A USB CDC console with a per-second heartbeat.
 
-The goal is not to copy `hello_hdmi/main.c` verbatim; it is to
-explain the design choices behind each section so you can write your
+The point isn't to copy `hello_hdmi/main.c` verbatim. The point is to
+explain the design choices section by section so you can write your
 own application against this driver. Read it alongside
 [BUILDING.md](BUILDING.md) (toolchain) and [LLM_GUIDE.md](LLM_GUIDE.md)
 (API reference and bug catalogue).
@@ -43,15 +43,14 @@ infamous "red flash").
 - The palette LUT (256 entries of RGB888).
 - Audio sample generation.
 
-The two cores share two pieces of state via well-defined APIs:
+The two cores share state through two narrow APIs:
 
 | Shared state         | Producer (Core 0)               | Consumer (Core 1)                  |
 |----------------------|---------------------------------|------------------------------------|
 | Framebuffer pixels   | `frank_hdmi_set_buffer()`, direct writes | scanline reads via palette LUT |
 | Audio ring (~64 ms)  | `frank_hdmi_audio_write()`      | libdvi data-island packetiser      |
 
-Everything else (PIO programs, DMA channels, IRQ wiring) is the
-driver's; do not touch any of it.
+PIO programs, DMA channels, IRQ wiring: don't touch any of it.
 
 ---
 
@@ -149,9 +148,9 @@ static const uint32_t test_palette[6] = {
 };
 ```
 
-> **Why not SMPTE colour bars?** Most capture cards display vertical
-> SMPTE bars when there is no HDMI signal. If your test pattern is
-> SMPTE bars, you cannot tell working from broken at a glance.
+> Why not SMPTE colour bars? Most capture cards display vertical SMPTE
+> bars when they have no HDMI signal. If your test pattern looks like
+> SMPTE bars, you can't tell working from broken at a glance.
 
 ---
 
@@ -181,20 +180,19 @@ static void draw_static_pattern(void) {
 }
 ```
 
-Call this **once at init**, not every frame. We will explain why in
-the next step.
+Call this once at init, not every frame. The next step explains why.
 
 ---
 
 ## Step 4: animated sprite (do this carefully)
 
-Core 1 reads the framebuffer **live every scanline**. If Core 0
-rewrites the framebuffer while Core 1 is reading it, the output tears.
-Worse, a per-frame full-screen redraw is a ~76 KB SRAM write storm
-that starves Core 1's DMA bandwidth long enough to register on the
-HDMI side as red "late scanline" flashes and audio glitches.
+Core 1 reads the framebuffer live every scanline. If Core 0 rewrites
+the framebuffer while Core 1 is mid-read, the output tears. Worse, a
+per-frame full-screen redraw is a ~76 KB SRAM write storm that starves
+Core 1's DMA bandwidth long enough to register on the HDMI side as red
+"late scanline" flashes and audio glitches.
 
-The trick: only rewrite the parts of the framebuffer that change.
+So: rewrite only the pixels that change.
 
 ```c
 #define MARCHER_W  16
@@ -241,7 +239,7 @@ int main(void) {
      *    no signal lock at all. */
     set_sys_clock_khz(252000, true);
 
-    /* 2. USB stdio.  Optional, but extremely useful for debug. */
+    /* 2. USB stdio.  Optional, but very useful for debug. */
     stdio_init_all();
 
     /* 3. Palette: write whatever entries you need.  Safe to do this
@@ -275,12 +273,13 @@ No audio yet.
 
 ## Step 6: 440 Hz reference tone
 
-The simplest possible audio: a sine wave at a known frequency. The
-target sample rate is `FRANK_HDMI_AUDIO_RATE` (32 kHz). The driver
-expects packed `int16_t L, R, L, R, ...` in a contiguous buffer.
+Start with the simplest audio there is: a sine wave at a known
+frequency. The target sample rate is `FRANK_HDMI_AUDIO_RATE`
+(32 kHz). The driver expects packed `int16_t L, R, L, R, ...` in a
+contiguous buffer.
 
-We push one **video frame's worth** of audio per main-loop iteration.
-At 32 kHz / 60 Hz that's 533 stereo frames per chunk:
+Push one video frame's worth of audio per main-loop iteration. At
+32 kHz / 60 Hz that's 533 stereo frames per chunk:
 
 ```c
 #define AUDIO_RATE      FRANK_HDMI_AUDIO_RATE   /* 32000 */
@@ -340,15 +339,14 @@ Four instructions per sample, no FP, no clock-dependent latency.
 
 ## Step 7: producer rate must match the wire rate
 
-This is the single most important audio invariant. Get it wrong and
-your tone plays at a noticeably different pitch.
+This is the audio invariant most likely to bite you. Get it wrong and
+the tone plays at a noticeably different pitch.
 
-The driver tells the HDMI receiver the audio rate via the audio
-info-frame and CTS/N values (32 kHz). The receiver is a **pull**
-consumer: it drains samples at exactly that declared rate, regardless
-of how fast or slow the producer is feeding them in. Any mismatch
-shows up as pitch shift, and capture cards in particular re-clock the
-stream in audible jumps.
+The driver advertises an audio rate to the HDMI receiver via the
+info-frame and CTS/N values (32 kHz). The receiver is a pull consumer:
+it drains samples at that declared rate, regardless of how fast the
+producer feeds them in. Any mismatch shows up as pitch shift, and
+capture cards in particular re-clock the stream in audible jumps.
 
 ### What goes wrong with `sleep_ms(17)`
 
@@ -428,13 +426,12 @@ while (1) {
 If you just want a tone-and-silence test, skip this section.
 
 The melody is a 4-bar synth riff (F#5 F#5 D5 B4 B4 E5 E5 G#5) with
-bass on every quarter and kick/snare on alternating beats, in
-A-major over an I-IV-V-I chord progression. ~169 BPM.
+bass on every quarter and kick/snare on alternating beats, in A-major
+over an I-IV-V-I chord progression. ~169 BPM.
 
-The point of the exercise: demonstrate that the audio path can carry
-multiple summed voices without clipping, with a stereo image, and with
-short percussive transients (kick, snare) that exercise the dynamic
-range.
+The point of doing this is to confirm the audio path can carry several
+summed voices without clipping, hold a stereo image, and pass short
+percussive transients (kick, snare) cleanly.
 
 ### Voices: oscillator + envelope
 
@@ -562,10 +559,9 @@ int32_t s_snare = osc_tick(&v_snare.osc)
 
 ## Step 10: video animation in the same loop
 
-We also want the marcher to march. Slot it into the same main-loop
-tick that pushes audio, **before** the audio fill (so the framebuffer
-write happens early in the chunk and Core 1 has the rest of the chunk
-to read it):
+The marcher needs to march. Slot it into the same main-loop tick that
+pushes audio, before the audio fill, so the framebuffer write happens
+early in the chunk and Core 1 has the rest of the chunk to read it:
 
 ```c
 int prev_col = 0;
@@ -589,8 +585,8 @@ disturb Core 1's bandwidth.
 
 ## Step 11: heartbeat
 
-Useful when something silently wedges. The driver exposes two
-counters; print them once a second:
+Worth wiring up early; saves time the first time something silently
+wedges. The driver exposes two counters. Print them once a second:
 
 ```c
 extern volatile uint32_t frank_hdmi_heartbeat_lines;

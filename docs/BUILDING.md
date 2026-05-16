@@ -261,9 +261,9 @@ add_subdirectory(third_party/frank-hdmi-sound)
 
 ## 7. Bugs and findings
 
-Every entry below is a real symptom that came up during driver
-development and the fix that resolved it. If you see one of these in
-your own integration, the matching fix probably applies.
+Each entry below is a symptom that came up during bring-up, and what
+fixed it. If you hit one of these in your own integration, the same
+fix probably applies.
 
 ### "No HDMI signal at all (capture card shows colour bars)"
 
@@ -279,15 +279,17 @@ squares plus a marching white block).
 The encode loop is alive but the receiver is not locking. In rough
 order of frequency:
 
-1. **`invert_diffpairs` wrong for your board.** Boards that put the
+1. `invert_diffpairs` is wrong for your board. Boards that put the
    negative leg on the lower-numbered GPIO of each pair (most) need
-   `invert_diffpairs=true` (the default). Boards wired the other way
-   need `false`. Override with `-DFRANK_HDMI_INVERT_DIFFPAIRS=0`.
-2. **System clock wrong for current `DVI_SM_CLKDIV`.** With CLKDIV=1,
-   `sys_clock` must be 252 MHz. With CLKDIV=2, `sys_clock` must be 504
-   MHz. Verify with `clock_get_hz(clk_sys)` printed over USB.
-3. **Pin numbers wrong.** Check the runtime GPIO funcsel: 4=PWM,
-   6=PIO0 on RP2350.
+   `invert_diffpairs=true`, which is the default. Boards wired the
+   other way need `false`. Override with
+   `-DFRANK_HDMI_INVERT_DIFFPAIRS=0`.
+2. System clock is wrong for the current `DVI_SM_CLKDIV`. With
+   CLKDIV=1, `sys_clock` must be 252 MHz. With CLKDIV=2, `sys_clock`
+   must be 504 MHz. Verify with `clock_get_hz(clk_sys)` printed over
+   USB.
+3. Pin numbers are wrong. Check the runtime GPIO funcsel: 4 = PWM,
+   6 = PIO0 on RP2350.
 
 ```c
 #include "hardware/structs/iobank0.h"
@@ -328,16 +330,16 @@ driver here is structured so palette writes before init are preserved.
 
 libdvi's `late_scanline_ctr` indicator. Core 1 is not keeping up with
 the TMDS encoder because Core 0 traffic on the AHB fabric or SRAM banks
-is starving it. Fixes already in this driver:
+is starving it. The driver already does:
 
 - `bus_ctrl.priority` bits set for PROC1, DMA_R, DMA_W.
 - TMDS DMA channels marked `HIGH_PRIORITY` (libdvi patch).
-- Palette LUT in `scratch_y`.
-- `fill_scanline` in `scratch_y`.
+- Palette LUT pinned in `scratch_y`.
+- `fill_scanline` pinned in `scratch_y`.
 - Pillarbox columns pre-zeroed once at init (no per-line memset).
 - `DVI_N_TMDS_BUFFERS=3` for IRQ slack.
 
-If you still see red lines, the most likely cause is a long XIP / PSRAM
+If red lines persist, the most likely cause is a long XIP or PSRAM
 stall on Core 0. Move the offending code into RAM with
 `__not_in_flash_func()`. The next most likely cause is a per-frame
 full-screen redraw, see "Tearing or flicker on a static scene" below.
@@ -362,10 +364,10 @@ square-flicker and audio glitches; the per-frame ~76 KB SRAM write
 storm starved Core 1's DMA bandwidth long enough to register on the
 HDMI side.
 
-For larger animated scenes you'd want a real double-buffer plus an
-atomic pointer swap. This driver doesn't ship one, but
-`frank_hdmi_set_buffer(new_fb, w, h)` is safe to call any time from
-Core 0 and is cheap.
+For larger animated scenes, allocate two framebuffers and call
+`frank_hdmi_set_buffer(new_fb, w, h)` once you finish drawing into the
+back buffer. The function is cheap and safe to call from Core 0 at
+any time.
 
 ### "No audio"
 
@@ -387,15 +389,16 @@ always uses `full=true`. Do not switch back.
 
 ### "Audio plays at the wrong pitch (~13 % high or low)"
 
-Producer rate doesn't match the declared wire rate.
+The producer's actual rate doesn't match the rate the driver
+advertises.
 
-The driver advertises a fixed rate to the HDMI receiver via the audio
-info-frame and CTS/N values (32 kHz by default). The receiver is a
-**pull** consumer: it drains samples at exactly that declared rate and
-is not flow-controlled by the producer. If your producer's long-term
-sample rate differs from the declared rate, the receiver hears the
-difference as pitch shift, and capture cards in particular re-clock
-the stream in audible jumps.
+The driver tells the HDMI receiver an audio rate via the info-frame
+and CTS/N values (32 kHz by default). The receiver is a pull consumer:
+it drains samples at that declared rate, regardless of how fast the
+producer is feeding them in. If your producer's long-term sample rate
+differs from the declared rate, the receiver hears the difference as
+pitch shift, and capture cards in particular re-clock the stream in
+audible jumps.
 
 Concrete failure: producing 533 samples every 17 ms (using
 `sleep_ms(17)` or `delayed_by_ms(prev, 17)`) gives 533 / 0.017 ≈
@@ -417,20 +420,21 @@ while (1) {
 ```
 
 This locks the long-term cadence to the wall clock at integer-µs
-precision. Produces a perfect 440 Hz tone with no glitches.
+precision. Tested: a 440 Hz tone comes out at 440 Hz, FFT-verified.
 
 ### "Audio has clicks audible only at high volume"
 
-Same root cause as the previous one: small but persistent producer
-rate mismatch plus receiver re-clocking. Pace off a single anchor with
-`delayed_by_us(start, chunks * CHUNK_US)` as shown above.
+Same root cause as the previous symptom: a small but persistent
+producer-rate mismatch the receiver re-clocks. Anchor every chunk's
+deadline to a single `start` time with
+`delayed_by_us(start, chunks * CHUNK_US)`, as shown above.
 
-A second cause: `sinf()` per sample. `sinf()` is software floating
-point on the RP2350 (no hardware FP). A naive `for (i=0..532) buf[i] =
-sinf(phase) * gain` per video frame is slow enough that the audio push
-slips its deadline, the producer falls behind, and the receiver
-underruns. Use a sine LUT with a 32-bit fixed-point phase accumulator
-instead:
+A second cause: `sinf()` called per sample. `sinf()` is software
+floating point on the RP2350 (no hardware FP). A naive
+`for (i=0..532) buf[i] = sinf(phase) * gain` per video frame is slow
+enough that the audio push slips its deadline, the producer falls
+behind, and the receiver underruns. Use a sine LUT and a 32-bit
+fixed-point phase accumulator instead:
 
 ```c
 static int16_t sine_lut[256];
