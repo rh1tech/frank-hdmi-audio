@@ -1,8 +1,14 @@
 /*
  * hello_hdmi — minimal example for frank-hdmi-sound.
  *
- * Draws SMPTE-style colour bars in the 320x240 logical canvas and
- * emits a 440 Hz sine wave on both audio channels.
+ * Draws an animated test pattern (navy field with a faint grid,
+ * three coloured squares and a marching white block) in the 320x240
+ * logical canvas, and plays a short audio cycle:
+ *
+ *   1. 3 s of pure 440 Hz sine reference tone.
+ *   2. 1 s of silence.
+ *   3. A multi-voice test melody on loop (synth lead + bass + kick
+ *      + snare drums), forever.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
@@ -177,81 +183,162 @@ static void fill_tone(uint32_t *phase) {
     *phase = p;
 }
 
-/* ----------------- silence (gap between tone and theme) ---------- */
+/* ----------------- silence (gap between tone and melody) --------- */
 
 static void fill_silence(void) {
     memset(chunk_buf, 0, sizeof chunk_buf);
 }
 
 /* ================================================================== */
-/*  Terminator theme                                                   */
+/*  Test melody                                                        */
 /* ================================================================== */
 
 /*
- * The Terminator main-title theme by Brad Fiedel.  The famous hook
- * is a 13-sixteenth-note ostinato in C# minor (often notated as 13/8
- * or felt as 5/4 with a triplet pull).  Accents on beats 1, 4, 8 and
- * 11 give the iconic mechanical "DUN ... dun-dun-dun ... DUN ..." feel.
+ * Test melody: 4-bar A-major synth riff with bass and drums.
  *
- * Voicing:
- *   - bass:   E1/E2 octave drone, retriggered on every beat
- *   - hit:    low-octave anvil/clang on the four accents (E2)
- *   - lead:   high-octave bell line moving E5 / G5 / B5
- *   - drone: sustained C# minor power-fifth E2+B2 in the background
+ * The riff is reminiscent of an 80s pop hook — a bright eighth-note
+ * sequence (F#5 F#5 D5 B4 B4 E5 E5 G#5) repeated over an
+ * I-IV-V-I chord progression (A → D → E → A).  Used as a non-trivial
+ * test signal that exercises stereo, multiple voices, and a wide
+ * dynamic range.
  *
- * The signature pattern (one loop = 13 sixteenths):
+ * Tempo: ~169 BPM in 4/4.  At 32 kHz a sixteenth-note is
+ * 32000 * 60 / (169 * 4) ≈ 2840 samples.
  *
- *      1  2  3   4  5  6  7   8  9 10  11 12 13
- *      *  .  .   *  .  .  .   *  .  .   *  .  .
- *
- * where '*' = accented hit, '.' = soft tick.  The lead part also
- * pulses on the accented beats, hopping E5 → G5 → E5 → B5.
- *
- * Tempo ≈ 130 BPM in 4/4, so a sixteenth ≈ 115 ms.  We pick
- * SIXTEENTH_SAMPLES = 3700 (115.6 ms at 32 kHz) which keeps the loop
- * length cleanly within an integer number of audio chunks.
+ * Voices:
+ *   - lead:  bright synth riff
+ *   - bass:  root note of the current chord, eighth-note pulse
+ *   - kick:  beats 1 and 3 (low click)
+ *   - snare: beats 2 and 4 (mid click + noise burst)
  */
 
-/* Note frequencies in Hz, C# minor / E natural-minor neighbours. */
-#define HZ_E1    41
+/* Note frequencies in Hz (equal-temperament, A4 = 440 Hz). */
+#define HZ_A1    55
 #define HZ_E2    82
-#define HZ_B2   123
+#define HZ_A2   110
+#define HZ_D3   147
 #define HZ_E3   165
-#define HZ_E4   330
+#define HZ_A3   220
+#define HZ_B4   494
+#define HZ_D5   587
 #define HZ_E5   659
-#define HZ_G5   784
-#define HZ_B5   988
+#define HZ_FS5  740   /* F#5 */
+#define HZ_GS5  831   /* G#5 */
+#define HZ_A5   880
+
+/* Drum "voices" are short enveloped tones at ~kick/snare pitches. */
+#define HZ_KICK  60
+#define HZ_SNARE 220
 
 typedef struct {
-    uint16_t bass;     /* sub-bass drone (always low E) */
-    uint16_t hit;      /* anvil/accent voice */
-    uint16_t lead;     /* high bell line */
-    uint16_t drone;    /* sustained power-fifth */
+    uint16_t lead;    /* synth riff */
+    uint16_t bass;    /* bassline */
+    uint8_t  kick;    /* 1 = trigger kick */
+    uint8_t  snare;   /* 1 = trigger snare */
 } step_t;
 
 /*
- * 13-sixteenth-note loop with accents on positions 0, 3, 7 and 10
- * (zero-based).  This is the "DUN ... dun ... dun-dun ... DUN ..."
- * pulse the film opens with.
+ * 16-sixteenth-note bar, lead on every other slot.  Steps 0, 2, 4..14
+ * carry the eighth-note lead.  Drums on beats 1/3 (steps 0, 8) for
+ * kick, beats 2/4 (steps 4, 12) for snare.
  */
-static const step_t pattern[13] = {
-    /*  0 */ { HZ_E1, HZ_E2, HZ_E5, HZ_B2 },   /* accent */
-    /*  1 */ { 0,     0,     0,     0     },
-    /*  2 */ { 0,     0,     0,     0     },
-    /*  3 */ { HZ_E1, HZ_E2, HZ_G5, 0     },   /* accent */
-    /*  4 */ { 0,     0,     0,     0     },
-    /*  5 */ { 0,     0,     0,     0     },
-    /*  6 */ { 0,     0,     0,     0     },
-    /*  7 */ { HZ_E1, HZ_E2, HZ_E5, HZ_B2 },   /* accent */
-    /*  8 */ { 0,     0,     0,     0     },
-    /*  9 */ { 0,     0,     0,     0     },
-    /* 10 */ { HZ_E1, HZ_E2, HZ_B5, 0     },   /* accent */
-    /* 11 */ { 0,     0,     0,     0     },
-    /* 12 */ { 0,     0,     0,     0     },
+#define K  1, 0   /* kick, no snare */
+#define S  0, 1   /* no kick, snare */
+#define _  0, 0   /* no drum */
+
+/* Riff lead: F#5 F#5 D5 B4 B4 E5 E5 G#5 (8 eighths per bar). */
+#define LEAD_NOTES_BAR \
+    { HZ_FS5, HZ_FS5, HZ_D5, HZ_B4, HZ_B4, HZ_E5, HZ_E5, HZ_GS5 }
+
+/*
+ * One bar = 16 step_t entries.  Lead notes land on even steps; odd
+ * steps continue (no retrigger).  Bass plays root on every quarter
+ * (steps 0, 4, 8, 12).  Drums per bar: kick on 0 and 8, snare on 4
+ * and 12.
+ */
+static const step_t pattern[64] = {
+    /* ---- Bar 1: A major (lead bass = A2) ---- */
+    /*  0 */ { HZ_FS5, HZ_A2, K },
+    /*  1 */ { 0,      0,     _ },
+    /*  2 */ { HZ_FS5, 0,     _ },
+    /*  3 */ { 0,      0,     _ },
+    /*  4 */ { HZ_D5,  HZ_A2, S },
+    /*  5 */ { 0,      0,     _ },
+    /*  6 */ { HZ_B4,  0,     _ },
+    /*  7 */ { 0,      0,     _ },
+    /*  8 */ { HZ_B4,  HZ_A2, K },
+    /*  9 */ { 0,      0,     _ },
+    /* 10 */ { HZ_E5,  0,     _ },
+    /* 11 */ { 0,      0,     _ },
+    /* 12 */ { HZ_E5,  HZ_A2, S },
+    /* 13 */ { 0,      0,     _ },
+    /* 14 */ { HZ_GS5, 0,     _ },
+    /* 15 */ { 0,      0,     _ },
+
+    /* ---- Bar 2: D major (bass = D3) ---- */
+    /* 16 */ { HZ_FS5, HZ_D3, K },
+    /* 17 */ { 0,      0,     _ },
+    /* 18 */ { HZ_FS5, 0,     _ },
+    /* 19 */ { 0,      0,     _ },
+    /* 20 */ { HZ_D5,  HZ_D3, S },
+    /* 21 */ { 0,      0,     _ },
+    /* 22 */ { HZ_B4,  0,     _ },
+    /* 23 */ { 0,      0,     _ },
+    /* 24 */ { HZ_B4,  HZ_D3, K },
+    /* 25 */ { 0,      0,     _ },
+    /* 26 */ { HZ_E5,  0,     _ },
+    /* 27 */ { 0,      0,     _ },
+    /* 28 */ { HZ_E5,  HZ_D3, S },
+    /* 29 */ { 0,      0,     _ },
+    /* 30 */ { HZ_GS5, 0,     _ },
+    /* 31 */ { 0,      0,     _ },
+
+    /* ---- Bar 3: E major (bass = E3) ---- */
+    /* 32 */ { HZ_FS5, HZ_E3, K },
+    /* 33 */ { 0,      0,     _ },
+    /* 34 */ { HZ_FS5, 0,     _ },
+    /* 35 */ { 0,      0,     _ },
+    /* 36 */ { HZ_D5,  HZ_E3, S },
+    /* 37 */ { 0,      0,     _ },
+    /* 38 */ { HZ_B4,  0,     _ },
+    /* 39 */ { 0,      0,     _ },
+    /* 40 */ { HZ_B4,  HZ_E3, K },
+    /* 41 */ { 0,      0,     _ },
+    /* 42 */ { HZ_E5,  0,     _ },
+    /* 43 */ { 0,      0,     _ },
+    /* 44 */ { HZ_E5,  HZ_E3, S },
+    /* 45 */ { 0,      0,     _ },
+    /* 46 */ { HZ_GS5, 0,     _ },
+    /* 47 */ { 0,      0,     _ },
+
+    /* ---- Bar 4: A major back to root (bass = A2) ---- */
+    /* 48 */ { HZ_FS5, HZ_A2, K },
+    /* 49 */ { 0,      0,     _ },
+    /* 50 */ { HZ_FS5, 0,     _ },
+    /* 51 */ { 0,      0,     _ },
+    /* 52 */ { HZ_D5,  HZ_A2, S },
+    /* 53 */ { 0,      0,     _ },
+    /* 54 */ { HZ_B4,  0,     _ },
+    /* 55 */ { 0,      0,     _ },
+    /* 56 */ { HZ_B4,  HZ_A2, K },
+    /* 57 */ { 0,      0,     _ },
+    /* 58 */ { HZ_E5,  0,     _ },
+    /* 59 */ { 0,      0,     _ },
+    /* 60 */ { HZ_E5,  HZ_A2, S },
+    /* 61 */ { 0,      0,     _ },
+    /* 62 */ { HZ_GS5, 0,     _ },
+    /* 63 */ { 0,      0,     _ },
 };
 
-#define PATTERN_LEN         13
-#define SIXTEENTH_SAMPLES   3700
+#undef K
+#undef S
+#undef _
+
+#define PATTERN_LEN         64
+/* 169 BPM, 16ths: 32000 * 60 / (169 * 4) = 2841 samples.  Round to
+ * 2840 for an even count; the tempo ends up 169.014 BPM, perceptually
+ * indistinguishable from 169. */
+#define SIXTEENTH_SAMPLES   2840
 #define LOOP_SAMPLES        (PATTERN_LEN * SIXTEENTH_SAMPLES)
 
 /*
@@ -265,35 +352,46 @@ typedef struct {
     uint8_t  decay_shift;
 } voice_t;
 
-static voice_t v_bass;     /* slow decay so the sub-bass sustains under hits */
-static voice_t v_hit;      /* fast decay — percussive anvil */
-static voice_t v_lead;     /* medium decay — bell ring */
-static voice_t v_drone;    /* very slow — almost a pad */
+static voice_t v_lead;    /* synth riff */
+static voice_t v_bass;    /* bass line */
+static voice_t v_kick;    /* kick drum (low-frequency click) */
+static voice_t v_snare;   /* snare drum (mid-frequency click + noise) */
 
-static uint32_t theme_step_pos;
-static uint32_t theme_step_index;
-
-static void theme_init(void) {
-    memset(&v_bass,  0, sizeof v_bass);
-    memset(&v_hit,   0, sizeof v_hit);
-    memset(&v_lead,  0, sizeof v_lead);
-    memset(&v_drone, 0, sizeof v_drone);
-
-    v_bass.base_amp    = 14000;  v_bass.decay_shift  = 14; /* very slow */
-    v_hit.base_amp     = 12000;  v_hit.decay_shift   =  9; /* punchy */
-    v_lead.base_amp    =  9000;  v_lead.decay_shift  = 11; /* bell */
-    v_drone.base_amp   =  5000;  v_drone.decay_shift = 13; /* slow pad */
-
-    theme_step_pos = 0;
-    theme_step_index = 0;
+/* Cheap LFSR-based pseudo-noise generator for the snare. */
+static uint32_t noise_state = 0xACE1u;
+static inline int16_t noise_tick(void) {
+    /* Galois LFSR with maximal-length feedback for 32-bit. */
+    uint32_t bit = ((noise_state >> 0) ^ (noise_state >> 1)
+                  ^ (noise_state >> 21) ^ (noise_state >> 31)) & 1u;
+    noise_state = (noise_state >> 1) | (bit << 31);
+    return (int16_t)(noise_state & 0xffff) - 16384;
 }
 
-static void theme_retrigger(voice_t *v, uint16_t hz) {
-    if (hz == 0) {
-        /* Don't kill an already-ringing voice on a "rest" step —
-         * just let its envelope decay naturally. */
-        return;
-    }
+static uint32_t melody_step_pos;
+static uint32_t melody_step_index;
+
+static void melody_init(void) {
+    memset(&v_lead,  0, sizeof v_lead);
+    memset(&v_bass,  0, sizeof v_bass);
+    memset(&v_kick,  0, sizeof v_kick);
+    memset(&v_snare, 0, sizeof v_snare);
+
+    v_lead.base_amp  = 11000; v_lead.decay_shift  = 12; /* bright synth */
+    v_bass.base_amp  = 13000; v_bass.decay_shift  = 11; /* short bass */
+    v_kick.base_amp  = 18000; v_kick.decay_shift  =  8; /* short, punchy */
+    v_snare.base_amp = 14000; v_snare.decay_shift =  7; /* very short */
+
+    melody_step_pos = 0;
+    melody_step_index = 0;
+}
+
+static void melody_retrigger(voice_t *v, uint16_t hz) {
+    if (hz == 0) return;
+    osc_set_freq_hz(&v->osc, hz);
+    v->osc.amp = v->base_amp;
+}
+
+static void melody_trigger_drum(voice_t *v, uint16_t hz) {
     osc_set_freq_hz(&v->osc, hz);
     v->osc.amp = v->base_amp;
 }
@@ -307,39 +405,46 @@ static inline void voice_envelope_tick(voice_t *v) {
     }
 }
 
-/* Generate one chunk (FRAMES_PER_VID samples) of the theme. */
-static void fill_theme(void) {
+/* Generate one chunk (FRAMES_PER_VID samples) of the song. */
+static void fill_melody(void) {
     for (int i = 0; i < FRAMES_PER_VID; ++i) {
-        if (theme_step_pos == 0) {
-            const step_t *s = &pattern[theme_step_index];
-            theme_retrigger(&v_bass,  s->bass);
-            theme_retrigger(&v_hit,   s->hit);
-            theme_retrigger(&v_lead,  s->lead);
-            theme_retrigger(&v_drone, s->drone);
+        if (melody_step_pos == 0) {
+            const step_t *s = &pattern[melody_step_index];
+            melody_retrigger(&v_lead, s->lead);
+            melody_retrigger(&v_bass, s->bass);
+            if (s->kick)  melody_trigger_drum(&v_kick,  HZ_KICK);
+            if (s->snare) melody_trigger_drum(&v_snare, HZ_SNARE);
         }
 
-        int32_t s_bass  = osc_tick(&v_bass.osc);
-        int32_t s_hit   = osc_tick(&v_hit.osc);
         int32_t s_lead  = osc_tick(&v_lead.osc);
-        int32_t s_drone = osc_tick(&v_drone.osc);
+        int32_t s_bass  = osc_tick(&v_bass.osc);
+        int32_t s_kick  = osc_tick(&v_kick.osc);
+        int32_t s_snare_t = osc_tick(&v_snare.osc);
 
-        voice_envelope_tick(&v_bass);
-        voice_envelope_tick(&v_hit);
+        /* Mix noise into the snare so it actually sounds like a snare
+         * rather than a sine ping.  Scale the noise by the snare
+         * envelope so it disappears when the drum decays. */
+        int32_t s_snare = s_snare_t
+                       + ((int32_t)noise_tick() * (int32_t)v_snare.osc.amp >> 16);
+
         voice_envelope_tick(&v_lead);
-        voice_envelope_tick(&v_drone);
+        voice_envelope_tick(&v_bass);
+        voice_envelope_tick(&v_kick);
+        voice_envelope_tick(&v_snare);
 
-        /* Stereo image: bass and drone centred (mono); the hit lands
-         * slightly left-of-centre, the bell-lead slightly right. */
-        int32_t centre = s_bass + s_drone;
-        int32_t left   = centre + s_hit + (s_lead >> 1);
-        int32_t right  = centre + (s_hit >> 1) + s_lead;
+        /* Stereo image: bass and kick centred (low energy belongs in
+         * the middle).  The lead is panned slightly right, the snare
+         * slightly left, so the riff sits in a wider field. */
+        int32_t centre = s_bass + s_kick;
+        int32_t left   = centre + s_snare + (s_lead >> 1);
+        int32_t right  = centre + (s_snare >> 1) + s_lead;
 
         chunk_buf[i * 2 + 0] = clamp16(left);
         chunk_buf[i * 2 + 1] = clamp16(right);
 
-        if (++theme_step_pos >= SIXTEENTH_SAMPLES) {
-            theme_step_pos = 0;
-            theme_step_index = (theme_step_index + 1) % PATTERN_LEN;
+        if (++melody_step_pos >= SIXTEENTH_SAMPLES) {
+            melody_step_pos = 0;
+            melody_step_index = (melody_step_index + 1) % PATTERN_LEN;
         }
     }
 }
@@ -409,13 +514,13 @@ int main(void) {
      * Playback state machine:
      *   PHASE_TONE     — 3 s of pure 440 Hz tone
      *   PHASE_SILENCE  — 1 s of silence
-     *   PHASE_THEME    — Terminator main-title hook on loop
+     *   PHASE_MELODY    — multi-voice test melody on loop
      *
      * Number of chunks per phase = duration_secs * AUDIO_RATE /
      * FRAMES_PER_VID.  At 32 kHz / 533 = 60.04 chunks/sec, so 3 s
      * ≈ 180 chunks, 1 s ≈ 60 chunks.
      */
-    enum { PHASE_TONE, PHASE_SILENCE, PHASE_THEME };
+    enum { PHASE_TONE, PHASE_SILENCE, PHASE_MELODY };
     int    phase_state    = PHASE_TONE;
     uint64_t phase_chunks = 0;
     const uint64_t TONE_CHUNKS    = 3 * AUDIO_RATE / FRAMES_PER_VID;
@@ -429,7 +534,7 @@ int main(void) {
     uint64_t chunks_pushed = 0;
     absolute_time_t start = get_absolute_time();
 
-    theme_init();
+    melody_init();
 
     while (1) {
         /* Video: only the marcher's bounding box is rewritten per
@@ -453,13 +558,13 @@ int main(void) {
         case PHASE_SILENCE:
             fill_silence();
             if (++phase_chunks >= SILENCE_CHUNKS) {
-                phase_state = PHASE_THEME;
+                phase_state = PHASE_MELODY;
                 phase_chunks = 0;
-                theme_init();   /* restart the theme cleanly */
+                melody_init();   /* restart the melody cleanly */
             }
             break;
-        case PHASE_THEME:
-            fill_theme();
+        case PHASE_MELODY:
+            fill_melody();
             ++phase_chunks;
             break;
         }
@@ -471,7 +576,7 @@ int main(void) {
             last_log_ms = now_ms;
             const char *p = phase_state == PHASE_TONE    ? "tone"
                           : phase_state == PHASE_SILENCE ? "silence"
-                          :                                "theme";
+                          :                                "melody";
             printf("[hb] phase=%s core1_frames=%lu cpu_loop=%lu chunks=%llu\n",
                    p,
                    (unsigned long)frank_hdmi_heartbeat_frames,

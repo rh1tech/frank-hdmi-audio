@@ -155,8 +155,8 @@ squares and a marching white block, then plays:
 
 1. A pure 440 Hz tone for 3 seconds.
 2. 1 second of silence.
-3. The Terminator main-title theme (Brad Fiedel) on a four-voice
-   synth, looped.
+3. A multi-voice test melody (synth lead, bass, kick, snare) on
+   loop.
 
 A pre-built UF2 for the M2 board is also checked in at
 `release/hello_hdmi_m2.uf2`.
