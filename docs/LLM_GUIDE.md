@@ -201,9 +201,10 @@ unless you explicitly draw them.
 ### "Build fails with `Out of memory` panic at boot."
 
 Earlier libdvi versions `malloc()`'d the TMDS buffers from the heap
-(default Pico heap = 2 KB; TMDS buffers ≈ 12 KB). The vendored copy
-here uses a static buffer pool. If you upgrade libdvi from upstream,
-re-apply that patch (`src/libdvi/dvi.c`, search for `static_tmds_pool`).
+(default Pico heap = 2 KB; TMDS buffers ≈ 12 KB). The driver here
+uses a static buffer pool. If you replace `src/frank_dvi.c` with a
+fresh upstream `dvi.c`, re-apply that patch (search for
+`static_tmds_pool`).
 
 ### "Image is shifted right by half the screen."
 

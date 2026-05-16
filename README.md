@@ -193,12 +193,15 @@ room for an application working set on the RP2350's 512 KB.
 The driver source (`src/frank_hdmi.{c,h}`, the example, build system,
 docs) is GPL-3.0-or-later, Copyright (c) 2026 Mikhail Matveev.
 
-The vendored libdvi (under `src/libdvi/`) is BSD-3-Clause,
-Copyright (c) 2021 Luke Wren and contributors. See
-`src/libdvi/UPSTREAM_README.md` for the full upstream notice. The
-local patches against upstream are tagged with `PATCH
-(frank-hdmi-sound):` comments in the source so they can be lifted
-back upstream if anyone wants to.
+The driver internals (`src/frank_dvi*.{c,h}`,
+`src/frank_serialiser*`, `src/frank_audio_ring*`,
+`src/frank_data_packet*`, `src/frank_tmds*`,
+`src/frank_queue_inline.h`) are derivatives of libdvi by Luke Wren
+and shuichitakano, BSD-3-Clause, Copyright (c) 2021 Luke Wren and
+contributors. Each file carries the BSD notice; the local
+modifications relative to upstream are tagged with `PATCH
+(frank-hdmi-sound):` comments so they can be lifted back upstream
+if anyone wants to.
 
 ## Acknowledgements
 

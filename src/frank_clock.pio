@@ -1,0 +1,32 @@
+;
+; frank-hdmi-sound — RP2350 HDMI driver internals.
+;
+; (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
+;
+; SPDX-License-Identifier: BSD-3-Clause
+;
+; Derivative of libdvi by Luke Wren and contributors
+; (https://github.com/Wren6991/PicoDVI).  Renamed and lightly
+; patched for frank-hdmi-sound.
+;
+; Copyright (c) 2021 Luke Wren and contributors.
+;
+.program dvi_clock
+.wrap_target
+	set pins, 0b10 [4]  ; Drive pins and then delay for four cycles
+	set pins, 0b01 [4]  ; Invert pins and then delay for four cycles
+.wrap
+
+
+% c-sdk {
+// sets up the GPIO output, and configures the SM to output on particular pins
+
+void dvi_clock_program_init(PIO pio, uint sm, uint offset, uint pin) {
+   pio_gpio_init(pio, pin);
+   pio_gpio_init(pio, pin+1);
+   pio_sm_set_consecutive_pindirs(pio, sm, pin, 2, true);
+   pio_sm_config c = dvi_clock_program_get_default_config(offset);
+   sm_config_set_set_pins(&c, pin, 2);
+   pio_sm_init(pio, sm, offset, &c);
+}
+%}

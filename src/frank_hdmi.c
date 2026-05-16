@@ -55,10 +55,10 @@
 #include "hardware/dma.h"
 #include "hardware/structs/bus_ctrl.h"
 
-#include "libdvi/dvi.h"
-#include "libdvi/dvi_serialiser.h"
-#include "libdvi/dvi_config_defs.h"
-#include "libdvi/audio_ring.h"
+#include "frank_dvi.h"
+#include "frank_serialiser.h"
+#include "frank_dvi_config.h"
+#include "frank_audio_ring.h"
 
 /* ------------------------------------------------------------------ */
 /* PIO and pin configuration                                          */

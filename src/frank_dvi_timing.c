@@ -1,25 +1,20 @@
 /*
- * libdvi — TMDS / HDMI library for the Raspberry Pi Pico family.
+ * frank-hdmi-sound — RP2350 HDMI driver internals.
  *
- * Vendored verbatim into frank-hdmi-sound from
- *   https://github.com/shuichitakano/PicoDVI-audio
- * which is shuichitakano's HDMI-audio fork of
- *   https://github.com/Wren6991/PicoDVI
- * by Luke Wren.  The integration pattern this driver uses is taken
- * from
- *   https://github.com/fruit-bat/pico-zxspectrum
- * by fruit-bat and contributors.
+ * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
  * SPDX-License-Identifier: BSD-3-Clause
- * Copyright (c) 2021 Luke Wren and contributors.
  *
- * Local patches against upstream are tagged with
- * `PATCH (frank-hdmi-sound):` comments inside the file.  See the
- * top-level README and src/libdvi/UPSTREAM_README.md for the original
- * upstream notice.
+ * Derivative of libdvi by Luke Wren and contributors
+ * (https://github.com/Wren6991/PicoDVI), with HDMI audio additions
+ * from shuichitakano's PicoDVI-audio fork
+ * (https://github.com/shuichitakano/PicoDVI-audio).  Renamed,
+ * trimmed, and lightly patched for frank-hdmi-sound.
+ *
+ * Copyright (c) 2021 Luke Wren and contributors.
  */
-#include "dvi.h"
-#include "dvi_timing.h"
+#include "frank_dvi.h"
+#include "frank_dvi_timing.h"
 #include "hardware/dma.h"
 
 // This file contains:
