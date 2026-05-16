@@ -1,15 +1,17 @@
 /*
- * frank-hdmi-sound — TMDS encoder inner loops (Cortex-M0+ thumb).
+ * TMDS encoder inner loops, written in Cortex-M0+ thumb asm. Each loop
+ * processes one colour channel of a buffer of 16-bit (or 8-bit) packed
+ * pixels and emits a buffer of 10-bit TMDS symbols. The plain and
+ * leftshift variants differ in whether the channel needs an extra
+ * software shift before the interpolator can address the LUT (blue
+ * channel of RGB565 needs it, others don't).
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Trimmed-down derivative of the libdvi TMDS encoder loops by Luke
- * Wren and contributors (https://github.com/Wren6991/PicoDVI).  Only
- * the 16bpp and 8bpp pixel-doubling encoder loops (plain + leftshift)
- * are kept; the upstream 1bpp / 2bpp / fullres / palette loops have
- * been removed.
+ * Based on libdvi by Luke Wren and contributors
+ * (https://github.com/Wren6991/PicoDVI).
  *
  * Copyright (c) 2021 Luke Wren and contributors.
  */
@@ -193,7 +195,8 @@ decl_func tmds_encode_loop_8bpp_leftshift
 
 
 // ----------------------------------------------------------------------------
-// frank-hdmi-sound: dropped the upstream 1bpp / 2bpp / fullres /
-// palette inner loops.  They are not used by the scanline pipeline
-// in src/frank_hdmi.c; restore them from upstream libdvi if you want
-// to extend the driver to those modes.
+// Other bit depths (1bpp / 2bpp) and the full-resolution / palette
+// encoders that the upstream library ships with are not present here:
+// the frank-hdmi-sound scanline pipeline only ever calls the four
+// loops above.  Drop additional loops in here if you want to extend
+// the driver to other modes.

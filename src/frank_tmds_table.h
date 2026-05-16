@@ -1,15 +1,15 @@
 /*
- * frank-hdmi-sound — RP2350 HDMI driver internals.
+ * Pre-computed 256-entry TMDS encode lookup for the pixel-doubling
+ * encoder. Each entry packs two 10-bit TMDS symbols into a uint32 — the
+ * inner asm loop reads one entry per pair of pixels. Pinned in scratch_x
+ * at runtime so reads never compete with framebuffer traffic.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Derivative of libdvi by Luke Wren and contributors
- * (https://github.com/Wren6991/PicoDVI), with HDMI audio additions
- * from shuichitakano's PicoDVI-audio fork
- * (https://github.com/shuichitakano/PicoDVI-audio).  Renamed,
- * trimmed, and lightly patched for frank-hdmi-sound.
+ * Based on libdvi by Luke Wren and contributors
+ * (https://github.com/Wren6991/PicoDVI).
  *
  * Copyright (c) 2021 Luke Wren and contributors.
  */

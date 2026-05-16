@@ -1,46 +1,18 @@
 /*
- * frank-hdmi-sound — TMDS encoder driver glue.
+ * C-level driver for the TMDS encoder asm loops. Holds the 256-entry
+ * encode table, configures the SIO interpolators so lane 0/1 generate
+ * the LUT addresses for the two pixels in each input word, and
+ * dispatches to the correct asm loop (plain vs leftshift) depending on
+ * which colour channel needs an extra software shift.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Trimmed-down derivative of the TMDS encoder in libdvi by Luke Wren
- * and contributors (PicoDVI, https://github.com/Wren6991/PicoDVI),
- * with HDMI audio additions by shuichitakano (PicoDVI-audio,
- * https://github.com/shuichitakano/PicoDVI-audio).  The fullres /
- * palette / 1bpp paths have been removed; we only ship the
- * pixel-doubling 8bpp and 16bpp encoders that the frank-hdmi-sound
- * scanline pipeline actually uses.
+ * Based on libdvi by Luke Wren and contributors
+ * (https://github.com/Wren6991/PicoDVI).
  *
  * Copyright (c) 2021 Luke Wren and contributors.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above
- *    copyright notice, this list of conditions and the following
- *    disclaimer in the documentation and/or other materials provided
- *    with the distribution.
- * 3. Neither the name of the copyright holder nor the names of its
- *    contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE
- * COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
- * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
- * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
- * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include "hardware/interp.h"
 #include "frank_tmds.h"
@@ -126,10 +98,12 @@ void __not_in_flash_func(tmds_encode_data_channel_16bpp)(const uint32_t *pixbuf,
 }
 
 /*
- * 8bpp variant — used by libdvi's framebuffer-mode 8bpp consumer.
- * frank-hdmi-sound does not exercise this path itself but it stays in
- * the build so dvi_scanbuf_main_8bpp / dvi_framebuf_main_8bpp link
- * cleanly for callers that want them.
+ * 8bpp variant.  Same idea as the 16bpp encoder above but for
+ * paletted 8-bit framebuffers — used by the framebuffer-mode 8bpp
+ * worker for callers that want it.  frank-hdmi-sound's standard
+ * scanline path doesn't use this, but it links cleanly so
+ * dvi_scanbuf_main_8bpp / dvi_framebuf_main_8bpp work for
+ * applications that prefer 8bpp.
  */
 void __not_in_flash_func(tmds_encode_data_channel_8bpp)(const uint32_t *pixbuf,
                                                         uint32_t *symbuf,

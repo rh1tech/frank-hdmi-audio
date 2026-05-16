@@ -1,15 +1,14 @@
 /*
- * frank-hdmi-sound — RP2350 HDMI driver internals.
+ * Differential TMDS serialiser config — picks the PIO instance, state
+ * machine numbers and GPIO pin pairs that drive the three TMDS data
+ * lanes plus the pixel clock.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Derivative of libdvi by Luke Wren and contributors
- * (https://github.com/Wren6991/PicoDVI), with HDMI audio additions
- * from shuichitakano's PicoDVI-audio fork
- * (https://github.com/shuichitakano/PicoDVI-audio).  Renamed,
- * trimmed, and lightly patched for frank-hdmi-sound.
+ * Based on libdvi by Luke Wren and contributors
+ * (https://github.com/Wren6991/PicoDVI).
  *
  * Copyright (c) 2021 Luke Wren and contributors.
  */

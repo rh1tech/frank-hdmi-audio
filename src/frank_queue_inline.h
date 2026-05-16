@@ -1,15 +1,15 @@
 /*
- * frank-hdmi-sound — RP2350 HDMI driver internals.
+ * Header-only specialisation of pico_util's queue for 32-bit elements:
+ * drop the size byte that the generic API copies around, and inline the
+ * hot push/pop paths so the IRQ handler doesn't take a function call per
+ * scanline. Only used internally by frank_dvi.c.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Derivative of libdvi by Luke Wren and contributors
- * (https://github.com/Wren6991/PicoDVI), with HDMI audio additions
- * from shuichitakano's PicoDVI-audio fork
- * (https://github.com/shuichitakano/PicoDVI-audio).  Renamed,
- * trimmed, and lightly patched for frank-hdmi-sound.
+ * Based on libdvi by Luke Wren and contributors
+ * (https://github.com/Wren6991/PicoDVI).
  *
  * Copyright (c) 2021 Luke Wren and contributors.
  */

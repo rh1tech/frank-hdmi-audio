@@ -1,15 +1,16 @@
 /*
- * frank-hdmi-sound — RP2350 HDMI driver internals.
+ * Builds and parity-protects HDMI data-island packets: BCH header
+ * checks, audio-clock-regeneration, audio-sample sub-packets, AVI/audio
+ * InfoFrames, and the per-line stream layout the DVI engine consumes.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Derivative of libdvi by Luke Wren and contributors
+ * Based on libdvi by Luke Wren and contributors
  * (https://github.com/Wren6991/PicoDVI), with HDMI audio additions
  * from shuichitakano's PicoDVI-audio fork
- * (https://github.com/shuichitakano/PicoDVI-audio).  Renamed,
- * trimmed, and lightly patched for frank-hdmi-sound.
+ * (https://github.com/shuichitakano/PicoDVI-audio).
  *
  * Copyright (c) 2021 Luke Wren and contributors.
  */
@@ -221,6 +222,16 @@ void __not_in_flash_func(set_null)(void *data, int size) {
     }
 }
 
+/*
+ * Build one audio data-island packet containing up to 4 stereo
+ * samples pulled from the audio ring.  `n` is the sample count for
+ * this packet (1..4); `frameCt` is the running 8-bit IEC-60958
+ * frame counter — it gets decremented per sample and wraps at 192.
+ * Returns the updated counter so the next call picks up where this
+ * one left off.  If the ring runs short, the unused sub-packet
+ * slots are zero-filled — the receiver tolerates that, audible as
+ * a brief click.
+ */
 int  __not_in_flash_func(set_audio_sample)(data_packet_t *data_packet, audio_ring_t *audio_ring, const int n, int frameCt) {
     const int layout = 0;
     const int samplePresent = (1 << n) - 1;
@@ -272,6 +283,16 @@ int  __not_in_flash_func(set_audio_sample)(data_packet_t *data_packet, audio_rin
     return frameCt;
 }
 
+/*
+ * Build the audio clock regeneration packet.  This is the packet
+ * that lets the receiver work out the audio sample rate from the
+ * pixel clock — its `cts` and `n` values together define
+ *
+ *     128 * audio_freq = pixel_freq * n / cts
+ *
+ * The driver sends this packet on every vblank line so the receiver
+ * keeps its audio PLL locked.
+ */
 void set_audio_clock_regeneration(data_packet_t *data_packet, int cts, int n) {
     data_packet->header[0] = 1;
     data_packet->header[1] = 0;
@@ -292,6 +313,12 @@ void set_audio_clock_regeneration(data_packet_t *data_packet, int cts, int n) {
     memcpy(data_packet->subpacket[3], data_packet->subpacket[0], sizeof(data_packet->subpacket[0]));
 }
 
+/*
+ * Build the audio InfoFrame.  Tells the receiver the channel count
+ * (2 = stereo), coding type (PCM), sample size (16 bit) and sample
+ * rate code.  Sent once per video frame, alternating with the AVI
+ * InfoFrame on adjacent vblank lines.
+ */
 void set_audio_info_frame(data_packet_t *data_packet, int freq) {
     set_null(data_packet, sizeof(data_packet_t));
     data_packet->header[0] = 0x84;

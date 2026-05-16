@@ -1,15 +1,15 @@
 /*
- * frank-hdmi-sound — RP2350 HDMI driver internals.
+ * Brings the TMDS serialiser hardware up: configures three PIO state
+ * machines (one per TMDS data lane), drives the pixel clock either from
+ * a PWM slice or a fourth PIO SM, and applies the per-pad
+ * drive/slew/inversion settings.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Derivative of libdvi by Luke Wren and contributors
- * (https://github.com/Wren6991/PicoDVI), with HDMI audio additions
- * from shuichitakano's PicoDVI-audio fork
- * (https://github.com/shuichitakano/PicoDVI-audio).  Renamed,
- * trimmed, and lightly patched for frank-hdmi-sound.
+ * Based on libdvi by Luke Wren and contributors
+ * (https://github.com/Wren6991/PicoDVI).
  *
  * Copyright (c) 2021 Luke Wren and contributors.
  */
@@ -32,6 +32,15 @@
 static int clk_sm = 0;
 #endif
 
+/*
+ * Apply the pad-control settings appropriate for an HDMI line: low
+ * drive strength + slew limiting (the 3V3 LDO stays cool, and most
+ * receivers are happy with the resulting edge rates) and disable the
+ * digital input buffer (we never read these pins).  GPIO inversion
+ * is applied on top, picked from `invert_diffpairs` in the config —
+ * boards that wire P/N the wrong way round flip the bit here without
+ * touching the rest of the pipeline.
+ */
 static void dvi_configure_pad(uint gpio, bool invert) {
 	// 2 mA drive, enable slew rate limiting (this seems fine even at 720p30, and
 	// the 3V3 LDO doesn't get warm like when turning all the GPIOs up to 11).
@@ -44,6 +53,19 @@ static void dvi_configure_pad(uint gpio, bool invert) {
 	gpio_set_outover(gpio, invert ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
 }
 
+/*
+ * Bring up the TMDS serialiser hardware described by `cfg`.
+ *
+ * Loads the serialiser PIO program once, then for each of the three
+ * data lanes claims the requested state machine, configures it for
+ * the named GPIO pair, and applies the pad settings.
+ *
+ * The pixel clock is generated either by a PWM slice (default — the
+ * PWM hardware is rock-steady at 50% duty across both pins of the
+ * pair) or by a fourth PIO state machine, depending on whether the
+ * build defines DVI_USE_PIO_CLOCK.  PWM mode requires the clock pin
+ * to be even (PWM slice constraint).
+ */
 void dvi_serialiser_init(struct dvi_serialiser_cfg *cfg) {
 #if DVI_SERIAL_DEBUG
 	uint offset = pio_add_program(cfg->pio, &dvi_serialiser_debug_program);
@@ -97,6 +119,13 @@ void dvi_serialiser_init(struct dvi_serialiser_cfg *cfg) {
 	}
 }
 
+/*
+ * Master enable for the TMDS serialiser.  Toggles all three (or
+ * four, with PIO clock) state machines and the pixel-clock source
+ * together.  The DVI spec allows a phase offset between the data
+ * and clock lanes, so the data SMs and the clock generator don't
+ * have to be enabled in the same cycle.
+ */
 void dvi_serialiser_enable(struct dvi_serialiser_cfg *cfg, bool enable) {
 	uint mask = 0;
 	for (int i = 0; i < N_TMDS_LANES; ++i)

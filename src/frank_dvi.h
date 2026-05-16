@@ -1,15 +1,16 @@
 /*
- * frank-hdmi-sound — RP2350 HDMI driver internals.
+ * frank-hdmi-sound — DVI engine: dvi_inst state, init, IRQ wiring,
+ * scanline / framebuffer worker entry points, and HDMI audio data-
+ * island setup.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Derivative of libdvi by Luke Wren and contributors
+ * Based on libdvi by Luke Wren and contributors
  * (https://github.com/Wren6991/PicoDVI), with HDMI audio additions
  * from shuichitakano's PicoDVI-audio fork
- * (https://github.com/shuichitakano/PicoDVI-audio).  Renamed,
- * trimmed, and lightly patched for frank-hdmi-sound.
+ * (https://github.com/shuichitakano/PicoDVI-audio).
  *
  * Copyright (c) 2021 Luke Wren and contributors.
  */

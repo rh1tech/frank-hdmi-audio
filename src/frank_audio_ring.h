@@ -1,15 +1,17 @@
 /*
- * frank-hdmi-sound — RP2350 HDMI driver internals.
+ * Lock-free single-producer/single-consumer ring used by the HDMI audio
+ * data-island packetiser. The application pushes int16 stereo frames;
+ * the DVI IRQ pulls them out in groups of up to four samples per audio
+ * sub-packet.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Derivative of libdvi by Luke Wren and contributors
+ * Based on libdvi by Luke Wren and contributors
  * (https://github.com/Wren6991/PicoDVI), with HDMI audio additions
  * from shuichitakano's PicoDVI-audio fork
- * (https://github.com/shuichitakano/PicoDVI-audio).  Renamed,
- * trimmed, and lightly patched for frank-hdmi-sound.
+ * (https://github.com/shuichitakano/PicoDVI-audio).
  *
  * Copyright (c) 2021 Luke Wren and contributors.
  */

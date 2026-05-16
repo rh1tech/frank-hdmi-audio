@@ -1,15 +1,24 @@
 /*
- * frank-hdmi-sound — RP2350 HDMI driver internals.
+ * frank-hdmi-sound — DVI engine implementation.
+ *
+ * Wires up the per-instance state (`dvi_inst`), claims the three TMDS
+ * DMA channel pairs (control + data, per lane), pre-builds the
+ * scanline DMA control-block lists for vsync / vblank / active /
+ * blanked-active / error states, and runs the IRQ that hot-swaps
+ * those lists at every scanline boundary.  Also exposes the worker
+ * entry points the application calls from Core 1 to feed the encoder
+ * (scanbuf and framebuf modes, 8bpp and 16bpp), and the HDMI audio
+ * data-island setup that adds CEA-861 InfoFrames + audio sample
+ * packets to the stream.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Derivative of libdvi by Luke Wren and contributors
+ * Based on libdvi by Luke Wren and contributors
  * (https://github.com/Wren6991/PicoDVI), with HDMI audio additions
  * from shuichitakano's PicoDVI-audio fork
- * (https://github.com/shuichitakano/PicoDVI-audio).  Renamed,
- * trimmed, and lightly patched for frank-hdmi-sound.
+ * (https://github.com/shuichitakano/PicoDVI-audio).
  *
  * Copyright (c) 2021 Luke Wren and contributors.
  */
@@ -42,6 +51,34 @@ static inline void dvi_update_data_packet(struct dvi_inst *inst) {
     encode(&inst->next_data_stream, &packet, inst->timing->v_sync_polarity == vsync, inst->timing->h_sync_polarity);
 }
 
+/*
+ * One-shot bring-up for a DVI instance.
+ *
+ * The caller is expected to have already filled in the static fields
+ * of `inst` — most importantly `timing` (which mode to drive) and
+ * `ser_cfg` (which PIO + GPIOs to drive).  This function:
+ *
+ *   1. Resets the runtime state of the timing state machine.
+ *   2. Initialises the audio-data-island sub-state to "no audio".
+ *   3. Brings up the TMDS serialiser PIO state machines.
+ *   4. Claims six DMA channels (two per TMDS lane: one for the
+ *      control-block list, one for the symbol stream itself).
+ *   5. Allocates the four blocking queues that move scanlines and
+ *      TMDS buffers between the producer (application) and the
+ *      consumer (the IRQ-driven DMA chain).
+ *   6. Pre-builds the DMA control-block lists for the four scanline
+ *      "shapes": vsync line, vblank line, active line, blanked-active
+ *      line, and an "error" line used when the producer underruns.
+ *   7. Allocates the TMDS symbol buffers from a static pool sized at
+ *      compile time (DVI_STATIC_TMDS_MAX_PIX, default 640) and
+ *      pushes them into q_tmds_free so the encoder can pick them up.
+ *   8. Pre-fills the AVI InfoFrame with sensible defaults (RGB,
+ *      4:3 aspect, full range, picked from the timing).
+ *
+ * The two `spinlock_*` arguments are pico_util spinlock numbers used
+ * to make queue accesses safe across cores; pass distinct values
+ * obtained via `next_striped_spin_lock_num()`.
+ */
 void dvi_init(struct dvi_inst *inst, uint spinlock_tmds_queue, uint spinlock_colour_queue) {
     inst->dvi_started = false;
     inst->timing_state.v_ctr  = 0;
@@ -118,8 +155,16 @@ void dvi_init(struct dvi_inst *inst, uint spinlock_tmds_queue, uint spinlock_col
 
 }
 
-// The IRQs will run on whichever core calls this function (this is why it's
-// called separately from dvi_init)
+/*
+ * Hook the DMA-completion IRQ for the sync-lane data DMA.  Whichever
+ * core calls this is the one the IRQ will fire on, which is why it's
+ * a separate call from dvi_init() — the typical pattern is for the
+ * application's Core 0 to call dvi_init() (uses no IRQs of its own)
+ * and then for Core 1 to call this from its entry point.
+ *
+ * irq_num is DMA_IRQ_0 or DMA_IRQ_1; both are wired up internally,
+ * so callers can park their own DMA IRQs on the other one.
+ */
 void dvi_register_irqs_this_core(struct dvi_inst *inst, uint irq_num) {
     uint32_t mask_sync_channel = 1u << inst->dma_cfg[TMDS_SYNC_LANE].chan_data;
     uint32_t mask_all_channels = 0;
@@ -177,10 +222,24 @@ static inline void __attribute__((always_inline)) _dvi_load_dma_op(const struct 
     }
 }
 
-// Setup first set of control block lists, configure the control channels, and
-// trigger them. Control channels will subsequently be triggered only by DMA
-// CHAIN_TO on data channel completion. IRQ handler *must* be prepared before
-// calling this. (Hooked to DMA IRQ0)
+/*
+ * Set the DMA chain in motion and unblank the TMDS serialiser.
+ *
+ * Configures each lane's control channel to feed the data channel's
+ * registers from the pre-built scanline DMA list, then triggers all
+ * three control channels in lockstep.  After the first scanline runs,
+ * each data channel's CHAIN_TO will retrigger its own control
+ * channel, so the chain runs forever from a single trigger.
+ *
+ * The TMDS PIO state machines are deliberately enabled *after* their
+ * TX FIFOs are full — starting them with a partially-filled FIFO
+ * guarantees an underrun on the very first scanline and the receiver
+ * never locks.
+ *
+ * The DMA IRQ handler must be registered (dvi_register_irqs_this_core)
+ * before this is called; the chain expects an IRQ on every scanline
+ * to swap the next list in.
+ */
 void dvi_start(struct dvi_inst *inst) {
     if (inst->dvi_started) {
         return;
@@ -200,6 +259,12 @@ void dvi_start(struct dvi_inst *inst) {
     inst->dvi_started = true;
 }
 
+/*
+ * Tear the DMA chain down and silence the TMDS lanes.  Aborts every
+ * lane's control + data channel, acks any pending IRQ, and turns off
+ * the serialiser PIO state machines.  Safe to call when the instance
+ * isn't running — early-exits in that case.
+ */
 void dvi_stop(struct dvi_inst *inst) {
     if (!inst->dvi_started) {
         return;
@@ -245,9 +310,20 @@ static inline void __dvi_func_x(_dvi_prepare_scanline_16bpp)(struct dvi_inst *in
     queue_add_blocking_u32(&inst->q_tmds_valid, &tmdsbuf);
 }
 
-// "Worker threads" for TMDS encoding (core enters and never returns, but still handles IRQs)
-
-// Version where each record in q_colour_valid is one scanline:
+/*
+ * "Worker thread" entry points.  Each of these consumes scanlines
+ * from `q_colour_valid`, runs the encoder over them, and pushes the
+ * resulting TMDS buffer into `q_tmds_valid` for the DMA chain to
+ * pick up.  They never return; the calling core enters one and
+ * stays inside the loop forever (still servicing the DMA IRQ that
+ * was registered earlier).
+ *
+ * The "scanbuf" variants treat each `q_colour_valid` entry as a
+ * single scanline.  The "framebuf" variants below treat it as a
+ * pointer to the start of a whole framebuffer, and walk through
+ * line-by-line internally — useful if you'd rather not push every
+ * line through the queue.
+ */
 void __dvi_func(dvi_scanbuf_main_8bpp)(struct dvi_inst *inst) {
     while (1) {
         uint32_t *scanbuf = NULL;
@@ -258,7 +334,12 @@ void __dvi_func(dvi_scanbuf_main_8bpp)(struct dvi_inst *inst) {
     __builtin_unreachable();
 }
 
-// Ugh copy/paste but it lets us garbage collect the TMDS stuff that is not being used from .scratch_x
+/*
+ * Same shape as the 8bpp worker, but for RGB565 inputs.  The two
+ * versions are kept as separate functions on purpose: that way the
+ * linker can garbage-collect whichever encoder loops the application
+ * doesn't reach, instead of dragging both into scratch_x.
+ */
 void __dvi_func(dvi_scanbuf_main_16bpp)(struct dvi_inst *inst) {
     while (1) {
         uint32_t *scanbuf = NULL;
@@ -269,6 +350,27 @@ void __dvi_func(dvi_scanbuf_main_16bpp)(struct dvi_inst *inst) {
     __builtin_unreachable();
 }
 
+/*
+ * Per-scanline IRQ.  Fires four times per line — once for the front
+ * porch, sync, back porch, and active region — and on the active
+ * edge we have one full active scanline of "headroom" to install the
+ * DMA control-block list for the *next* line.  In broad strokes:
+ *
+ *   1. Advance the timing state machine (front porch -> sync -> ...)
+ *      so we know what kind of line is coming up.
+ *   2. Park the previous TMDS buffer on the free queue (deferred by
+ *      one scanline because the data DMA may still be reading it
+ *      when the IRQ fires).
+ *   3. If we owe scanlines to the encoder ("late" counter), drop the
+ *      next valid buffer on the floor instead of displaying it: the
+ *      buffer was generated for an earlier vertical position and
+ *      using it now would tear the picture.
+ *   4. Pick the right pre-built DMA list (vsync, vblank, active,
+ *      blanked-active, error) for this line and load it onto the
+ *      control channels.
+ *   5. If audio is enabled, ask the data-island packetiser for the
+ *      next packet to interleave into this line's blanking interval.
+ */
 static void __dvi_func(dvi_dma_irq_handler)(struct dvi_inst *inst) {
     // Every fourth interrupt marks the start of the horizontal active region. We
     // now have until the end of this region to generate DMA blocklist for next
@@ -367,7 +469,11 @@ static void __dvi_func(dvi_dma1_irq)() {
     dvi_dma_irq_handler(inst);
 }
 
-// DVI Data island related
+/* ----- HDMI data-island / audio API ----------------------------- */
+
+/* Reset the audio sub-state to "no audio".  Called from dvi_init().
+ * After this, calling dvi_audio_sample_buffer_set + dvi_set_audio_freq
+ * lights audio back up. */
 void dvi_audio_init(struct dvi_inst *inst) {
     inst->data_island_is_enabled = false;
     inst->scanline_is_enabled = false;
@@ -378,6 +484,17 @@ void dvi_audio_init(struct dvi_inst *inst) {
     inst->audio_frame_count = 0;
 }
 
+/*
+ * Switch from a pure-DVI signal to an HDMI signal that carries data
+ * islands.  Re-builds every scanline DMA list using the "with audio"
+ * variants (which leave a gap inside the horizontal blanking
+ * interval for the data-island packets) and points each list at the
+ * shared `next_data_stream` buffer.
+ *
+ * Call dvi_audio_sample_buffer_set + dvi_set_audio_freq before this
+ * if you actually want audio; this on its own enables only the
+ * InfoFrame slot.
+ */
 void dvi_enable_data_island(struct dvi_inst *inst) {
     inst->data_island_is_enabled  = true;
 
@@ -408,6 +525,12 @@ void dvi_update_data_island_ptr(struct dvi_scanline_dma_list *dma_list, data_isl
     }
 }
 
+/*
+ * Hand the driver the storage for the audio ring.  size must be a
+ * power of two; the producer pushes int16 stereo frames into it via
+ * the public frank_hdmi_audio_write() helper, and the IRQ pulls
+ * them out a few at a time per scanline.
+ */
 void dvi_audio_sample_buffer_set(struct dvi_inst *inst, audio_sample_t *buffer, int size) {
     audio_ring_set(&inst->audio_ring, buffer, size);
 }
@@ -418,6 +541,21 @@ void dvi_audio_sample_buffer_set(struct dvi_inst *inst, audio_sample_t *buffer, 
 // N: HDMI Constant
 // 128 * audio_freq = video_freq * N / CTS
 // e.g.: video_freq = 23495525, audio_freq = 44100 , CTS = 28000, N = 6727
+/*
+ * Tell the driver which HDMI audio sample rate to advertise on the
+ * wire and how to clock-regenerate it on the receiver.
+ *
+ * `audio_freq` is the nominal sample rate in Hz (32000, 44100,
+ * 48000 or a CEA-861 multiple).  `cts` and `n` are the
+ * audio-clock-regeneration values per CEA-861:
+ *
+ *     128 * audio_freq = pixel_freq * n / cts
+ *
+ * Picking n from the CEA-861 standard table for the chosen sample
+ * rate and computing cts from the active video clock keeps the
+ * receiver locked.  After this call, the data-island stream is
+ * automatically enabled.
+ */
 void dvi_set_audio_freq(struct dvi_inst *inst, int audio_freq, int cts, int n) {
     inst->audio_freq = audio_freq;
     set_audio_clock_regeneration(&inst->audio_clock_regeneration, cts, n);

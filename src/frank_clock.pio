@@ -1,13 +1,13 @@
 ;
-; frank-hdmi-sound — RP2350 HDMI driver internals.
+; Optional PIO program that emits the pixel clock as a square wave when
+; the build doesn't use a PWM slice for that purpose.
 ;
 ; (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
 ;
 ; SPDX-License-Identifier: BSD-3-Clause
 ;
-; Derivative of libdvi by Luke Wren and contributors
-; (https://github.com/Wren6991/PicoDVI).  Renamed and lightly
-; patched for frank-hdmi-sound.
+; Based on libdvi by Luke Wren and contributors
+; (https://github.com/Wren6991/PicoDVI).
 ;
 ; Copyright (c) 2021 Luke Wren and contributors.
 ;

@@ -1,15 +1,14 @@
 /*
- * frank-hdmi-sound — RP2350 HDMI driver internals.
+ * Compile-time DVI mode tables (640x480p60, 720x576p50, etc.) plus the
+ * helpers that turn a `dvi_timing` row into the DMA control-block lists
+ * used by the per-scanline DVI IRQ.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Derivative of libdvi by Luke Wren and contributors
- * (https://github.com/Wren6991/PicoDVI), with HDMI audio additions
- * from shuichitakano's PicoDVI-audio fork
- * (https://github.com/shuichitakano/PicoDVI-audio).  Renamed,
- * trimmed, and lightly patched for frank-hdmi-sound.
+ * Based on libdvi by Luke Wren and contributors
+ * (https://github.com/Wren6991/PicoDVI).
  *
  * Copyright (c) 2021 Luke Wren and contributors.
  */

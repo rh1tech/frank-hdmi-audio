@@ -1,15 +1,16 @@
 /*
- * frank-hdmi-sound — RP2350 HDMI driver internals.
+ * Types and helpers for HDMI data-island packets — both InfoFrames (AVI,
+ * audio) and the actual audio sample packets that ride in the horizontal
+ * blanking interval of every scanline.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Derivative of libdvi by Luke Wren and contributors
+ * Based on libdvi by Luke Wren and contributors
  * (https://github.com/Wren6991/PicoDVI), with HDMI audio additions
  * from shuichitakano's PicoDVI-audio fork
- * (https://github.com/shuichitakano/PicoDVI-audio).  Renamed,
- * trimmed, and lightly patched for frank-hdmi-sound.
+ * (https://github.com/shuichitakano/PicoDVI-audio).
  *
  * Copyright (c) 2021 Luke Wren and contributors.
  */

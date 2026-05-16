@@ -1,16 +1,14 @@
 /*
- * frank-hdmi-sound — TMDS encoder API.
+ * Public API for the TMDS encoder: per-channel encoders for 8bpp and
+ * 16bpp pixel-doubling, plus the asm inner loops that actually do the
+ * LUT lookups via the SIO interpolators.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Trimmed-down derivative of the libdvi TMDS encoder header by
- * Luke Wren and contributors (https://github.com/Wren6991/PicoDVI),
- * with HDMI audio additions from shuichitakano's PicoDVI-audio fork
- * (https://github.com/shuichitakano/PicoDVI-audio).  The fullres,
- * 1bpp and palette functions from upstream are not exposed because
- * frank-hdmi-sound does not use them.
+ * Based on libdvi by Luke Wren and contributors
+ * (https://github.com/Wren6991/PicoDVI).
  *
  * Copyright (c) 2021 Luke Wren and contributors.
  */
