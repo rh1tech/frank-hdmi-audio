@@ -1,17 +1,19 @@
 # frank-hdmi-sound
 
-A small HDMI video and audio driver for the Raspberry Pi RP2350,
-packaged as a Pico SDK library. It outputs 640x480p60 video from a
-320x240 palette-indexed framebuffer and embeds 32 kHz stereo PCM in
-the HDMI data-island stream. No external DAC, no separate audio path.
+FRANK HDMI Sound is a small HDMI video and audio driver for the 
+Raspberry Pi RP2350, packaged as a Pico SDK library. It outputs 
+640x480p60 video from a 320x240 palette-indexed framebuffer and embeds 
+32 kHz stereo PCM in the HDMI data-island stream. No external DAC, 
+no separate audio path.
 
-The library is a generalised fork of the libdvi-based HDMI path I
-wrote for [frank-snes](https://github.com/rh1tech/frank-snes). The
-TMDS engine itself is the
-[PicoDVI-audio](https://github.com/shuichitakano/PicoDVI-audio) build
-of [PicoDVI](https://github.com/Wren6991/PicoDVI). The integration
+The TMDS encoding core comes from
+[PicoDVI](https://github.com/Wren6991/PicoDVI) by Wren6991, via shuichitakano's
+[PicoDVI-audio](https://github.com/shuichitakano/PicoDVI-audio) fork,
+which adds HDMI data-island audio support. The libdvi integration
 pattern follows
-[pico-zxspectrum](https://github.com/fruit-bat/pico-zxspectrum).
+[pico-zxspectrum](https://github.com/fruit-bat/pico-zxspectrum). This
+library extracts and generalises the HDMI path originally written for
+[frank-snes](https://github.com/rh1tech/frank-snes).
 
 ## What you get
 
@@ -43,7 +45,7 @@ The driver writes a TMDS clock pair on `(CLK_PIN, CLK_PIN+1)` and three
 TMDS data pairs on `(D0_PIN, D0_PIN+1)`, `(D1_PIN, D1_PIN+1)`,
 `(D2_PIN, D2_PIN+1)`. `CLK_PIN` must be even (PWM slice constraint).
 
-Default layout matches the FRANK / MURMULATOR-2 board:
+Default layout matches the FRANK / M2 board:
 
 | Signal | GPIO  |
 |--------|-------|
@@ -156,9 +158,13 @@ squares and a marching white block, then plays:
 A pre-built UF2 for the M2 board is also checked in at
 `release/hello_hdmi_m2.uf2`.
 
-For a step-by-step walkthrough (toolchain install, configure, flash,
-verify, integrate, plus a debugging reference covering every bug the
+For a step-by-step walkthrough (toolchain install, configure, flash,                                
+verify, integrate, plus a debugging reference covering every bug the                                
 driver hit during bring-up), see [docs/BUILDING.md](docs/BUILDING.md).
+
+For a from-scratch tutorial that builds an app like `hello_hdmi` one
+piece at a time with explanations for every non-obvious line, see
+[docs/WRITING_AN_APP.md](docs/WRITING_AN_APP.md).
 
 ## System clock
 
