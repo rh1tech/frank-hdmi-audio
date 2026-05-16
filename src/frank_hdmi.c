@@ -1,5 +1,5 @@
 /*
- * frank-hdmi-sound — minimal HDMI video + audio driver for RP2350.
+ * frank-hdmi-sound. Minimal HDMI video + audio driver for RP2350.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
@@ -99,7 +99,7 @@ static const struct dvi_serialiser_cfg frank_dvi_cfg = {
 #define LOGICAL_H           FRANK_HDMI_LOGICAL_HEIGHT   /* = 240 */
 
 /* Two scanline buffers in flight gives one frame of slack between
- * producer and consumer — important when Core 0 is doing heavy SRAM
+ * producer and consumer.  This matters when Core 0 is doing heavy SRAM
  * or PSRAM work and stalls Core 1 momentarily. */
 #define N_SCANLINE_BUFS     2
 
@@ -171,7 +171,7 @@ uint32_t frank_hdmi_get_palette(uint8_t i) {
 /* Producer + consumer loop on Core 1                                 */
 /* ------------------------------------------------------------------ */
 
-/* Forward decl for the inlined encoder body — defined after the
+/* Forward decl for the inlined encoder body, defined after the
  * fill_scanline producer so both can sit in scratch_y. */
 static void encode_one_scanline_16bpp(struct dvi_inst *inst);
 
@@ -181,7 +181,7 @@ static void encode_one_scanline_16bpp(struct dvi_inst *inst);
  * Pillarbox columns (left + right of the source rectangle) are
  * pre-zeroed in frank_hdmi_init() and never rewritten per frame.
  * The hot path therefore reduces to a 320-byte palette LUT lookup
- * across only the source rectangle — short enough that Core 1 keeps
+ * across only the source rectangle.  Short enough that Core 1 keeps
  * up with the TMDS encoder even under heavy Core 0 SRAM contention.
  *
  * Placed in scratch_y so the per-scanline lookup runs out of Core
@@ -250,7 +250,7 @@ static void __not_in_flash_func(encode_one_scanline_16bpp)(struct dvi_inst *inst
  * sync rolls.
  */
 
-/* Heartbeat counter — bumped every encoded scanline by Core 1.
+/* Heartbeat counter.  Bumped every encoded scanline by Core 1.
  * Read by Core 0 to confirm the encode loop is alive.  Volatile so
  * the compiler reloads it each read; cross-core visibility relies on
  * the natural cache coherence of RP2350 SRAM. */
@@ -302,7 +302,7 @@ void frank_hdmi_init(void) {
      * configured with DVI_SM_CLKDIV=2 (see src/libdvi/CMakeLists.txt)
      * so they stay at spec rate when sys_clock runs at 2x the TMDS
      * bit clock.  Concretely: typical CPU clock is 504 MHz driving
-     * a 252 MHz TMDS link.  We do NOT change the CPU clock here —
+     * a 252 MHz TMDS link.  We do NOT change the CPU clock here;
      * the application picks its own.
      */
 
@@ -344,7 +344,7 @@ void frank_hdmi_init(void) {
     /*
      * Pre-fill scanline buffers with black RGB565.  fill_scanline()
      * never rewrites the pillarbox columns that flank the source
-     * rectangle, so they have to start out zeroed — and pre-filling
+     * rectangle, so they have to start out zeroed.  Pre-filling
      * the entire buffer is the simplest way to do that.
      */
     for (int i = 0; i < N_SCANLINE_BUFS; ++i) {
@@ -376,7 +376,7 @@ uint32_t frank_hdmi_audio_free(void) {
      * arithmetic.  The full=false branch over-reports free space by
      * up to rp-1 frames (a sign-error in audio_ring.c), which causes
      * the producer to overwrite samples the consumer hasn't read
-     * yet — audible as glitches/discontinuities mid-waveform.
+     * yet, audible as glitches and discontinuities mid-waveform.
      */
     return get_write_size(&dvi0.audio_ring, true);
 }

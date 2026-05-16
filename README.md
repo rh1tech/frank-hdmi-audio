@@ -80,7 +80,7 @@ the lower-numbered GPIO of each pair, also set
 
 ## Using the library in your project
 
-1. Drop the directory into your project tree. Vendored copy, git
+1. Drop the directory into your project tree. A vendored copy, a git
    submodule, or `FetchContent` all work.
 
 2. Add it to your top-level CMake:
@@ -196,12 +196,11 @@ docs) is GPL-3.0-or-later, Copyright (c) 2026 Mikhail Matveev.
 The driver internals (`src/frank_dvi*.{c,h}`,
 `src/frank_serialiser*`, `src/frank_audio_ring*`,
 `src/frank_data_packet*`, `src/frank_tmds*`,
-`src/frank_queue_inline.h`) are derivatives of libdvi by Luke Wren
-and shuichitakano, BSD-3-Clause, Copyright (c) 2021 Luke Wren and
-contributors. Each file carries the BSD notice; the local
-modifications relative to upstream are tagged with `PATCH
-(frank-hdmi-sound):` comments so they can be lifted back upstream
-if anyone wants to.
+`src/frank_queue_inline.h`) are based on libdvi by Luke Wren and
+shuichitakano. BSD-3-Clause, Copyright (c) 2021 Luke Wren and
+contributors. Each file carries the BSD notice; local changes are
+tagged `PATCH (frank-hdmi-sound):` so they can be lifted back
+upstream if anyone wants to.
 
 ## Acknowledgements
 

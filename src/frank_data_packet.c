@@ -225,11 +225,11 @@ void __not_in_flash_func(set_null)(void *data, int size) {
 /*
  * Build one audio data-island packet containing up to 4 stereo
  * samples pulled from the audio ring.  `n` is the sample count for
- * this packet (1..4); `frameCt` is the running 8-bit IEC-60958
- * frame counter — it gets decremented per sample and wraps at 192.
+ * this packet (1..4).  `frameCt` is the running 8-bit IEC-60958
+ * frame counter; it gets decremented per sample and wraps at 192.
  * Returns the updated counter so the next call picks up where this
  * one left off.  If the ring runs short, the unused sub-packet
- * slots are zero-filled — the receiver tolerates that, audible as
+ * slots are zero-filled.  The receiver tolerates that, audible as
  * a brief click.
  */
 int  __not_in_flash_func(set_audio_sample)(data_packet_t *data_packet, audio_ring_t *audio_ring, const int n, int frameCt) {
@@ -286,7 +286,7 @@ int  __not_in_flash_func(set_audio_sample)(data_packet_t *data_packet, audio_rin
 /*
  * Build the audio clock regeneration packet.  This is the packet
  * that lets the receiver work out the audio sample rate from the
- * pixel clock — its `cts` and `n` values together define
+ * pixel clock; its `cts` and `n` values together define
  *
  *     128 * audio_freq = pixel_freq * n / cts
  *

@@ -1,8 +1,8 @@
 /*
- * Brings the TMDS serialiser hardware up: configures three PIO state
- * machines (one per TMDS data lane), drives the pixel clock either from
- * a PWM slice or a fourth PIO SM, and applies the per-pad
- * drive/slew/inversion settings.
+ * Brings the TMDS serialiser hardware up.  Configures three PIO state
+ * machines (one per TMDS data lane), drives the pixel clock either
+ * from a PWM slice or a fourth PIO SM, and applies the per-pad drive,
+ * slew and inversion settings.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
@@ -34,11 +34,11 @@ static int clk_sm = 0;
 
 /*
  * Apply the pad-control settings appropriate for an HDMI line: low
- * drive strength + slew limiting (the 3V3 LDO stays cool, and most
+ * drive strength with slew limiting (the 3V3 LDO stays cool and most
  * receivers are happy with the resulting edge rates) and disable the
  * digital input buffer (we never read these pins).  GPIO inversion
- * is applied on top, picked from `invert_diffpairs` in the config —
- * boards that wire P/N the wrong way round flip the bit here without
+ * is applied on top, picked from `invert_diffpairs` in the config.
+ * Boards that wire P/N the wrong way round flip the bit here without
  * touching the rest of the pipeline.
  */
 static void dvi_configure_pad(uint gpio, bool invert) {
@@ -60,11 +60,11 @@ static void dvi_configure_pad(uint gpio, bool invert) {
  * data lanes claims the requested state machine, configures it for
  * the named GPIO pair, and applies the pad settings.
  *
- * The pixel clock is generated either by a PWM slice (default — the
- * PWM hardware is rock-steady at 50% duty across both pins of the
- * pair) or by a fourth PIO state machine, depending on whether the
- * build defines DVI_USE_PIO_CLOCK.  PWM mode requires the clock pin
- * to be even (PWM slice constraint).
+ * The pixel clock is generated either by a PWM slice (the default;
+ * the PWM hardware is rock-steady at 50% duty across both pins of
+ * the pair) or by a fourth PIO state machine, depending on whether
+ * the build defines DVI_USE_PIO_CLOCK.  PWM mode requires the clock
+ * pin to be even (PWM slice constraint).
  */
 void dvi_serialiser_init(struct dvi_serialiser_cfg *cfg) {
 #if DVI_SERIAL_DEBUG
@@ -120,7 +120,7 @@ void dvi_serialiser_init(struct dvi_serialiser_cfg *cfg) {
 }
 
 /*
- * Master enable for the TMDS serialiser.  Toggles all three (or
+ * Master enable for the TMDS serialiser.  Toggles the three (or
  * four, with PIO clock) state machines and the pixel-clock source
  * together.  The DVI spec allows a phase offset between the data
  * and clock lanes, so the data SMs and the clock generator don't

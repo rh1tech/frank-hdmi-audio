@@ -1,5 +1,5 @@
 /*
- * hello_hdmi — minimal example for frank-hdmi-sound.
+ * hello_hdmi. Minimal example for frank-hdmi-sound.
  *
  * Draws an animated test pattern (navy field with a faint grid,
  * three coloured squares and a marching white block) in the 320x240
@@ -37,8 +37,8 @@
 static uint8_t framebuffer[FB_W * FB_H];
 
 /*
- * Test pattern palette.  Deliberately avoids SMPTE colour bars —
- * those are the same image most capture cards display when there is
+ * Test pattern palette.  Deliberately avoids SMPTE colour bars,
+ * which are the same image most capture cards display when there is
  * no HDMI signal, so a working driver would be indistinguishable
  * from a broken one in a screenshot.
  */
@@ -87,9 +87,9 @@ static void draw_static_pattern(void) {
 /*
  * Erase the previous marcher position with the static-background
  * colour, then draw the new one.  Avoids redrawing the whole frame
- * every iteration — that caused the static squares to flicker (Core
- * 1 catches the framebuffer mid-redraw) and audio glitches (Core 0
- * SRAM bursts starved the TMDS DMA of bandwidth).
+ * every iteration.  Full-frame redraw caused the static squares to
+ * flicker (Core 1 catches the framebuffer mid-redraw) and audio
+ * glitches (Core 0 SRAM bursts starved the TMDS DMA of bandwidth).
  */
 #define MARCHER_W 16
 #define MARCHER_H 12
@@ -196,9 +196,9 @@ static void fill_silence(void) {
 /*
  * Test melody: 4-bar A-major synth riff with bass and drums.
  *
- * The riff is reminiscent of an 80s pop hook — a bright eighth-note
+ * The riff is reminiscent of an 80s pop hook: a bright eighth-note
  * sequence (F#5 F#5 D5 B4 B4 E5 E5 G#5) repeated over an
- * I-IV-V-I chord progression (A → D → E → A).  Used as a non-trivial
+ * I-IV-V-I chord progression (A, D, E, A).  Used as a non-trivial
  * test signal that exercises stereo, multiple voices, and a wide
  * dynamic range.
  *
@@ -454,7 +454,7 @@ int main(void) {
      * Pick the system clock.  libdvi is configured here with
      * DVI_SM_CLKDIV=1 so sys_clock = TMDS bit clock = 252 MHz.  No
      * core-voltage bump and no QMI flash retiming needed at this
-     * speed — keeps the example minimal.
+     * speed.  Keeps the example minimal.
      *
      * If you want the CPU at 504 MHz instead (e.g. to leave room
      * for an emulator on Core 0), override DVI_SM_CLKDIV=2 in your
@@ -512,9 +512,9 @@ int main(void) {
      * and shows up as audible pitch shift.
      *
      * Playback state machine:
-     *   PHASE_TONE     — 3 s of pure 440 Hz tone
-     *   PHASE_SILENCE  — 1 s of silence
-     *   PHASE_MELODY    — multi-voice test melody on loop
+     *   PHASE_TONE:    3 s of pure 440 Hz tone
+     *   PHASE_SILENCE: 1 s of silence
+     *   PHASE_MELODY:  multi-voice test melody on loop
      *
      * Number of chunks per phase = duration_secs * AUDIO_RATE /
      * FRAMES_PER_VID.  At 32 kHz / 533 = 60.04 chunks/sec, so 3 s

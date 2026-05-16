@@ -99,7 +99,7 @@ void __not_in_flash_func(tmds_encode_data_channel_16bpp)(const uint32_t *pixbuf,
 
 /*
  * 8bpp variant.  Same idea as the 16bpp encoder above but for
- * paletted 8-bit framebuffers — used by the framebuffer-mode 8bpp
+ * paletted 8-bit framebuffers, used by the framebuffer-mode 8bpp
  * worker for callers that want it.  frank-hdmi-sound's standard
  * scanline path doesn't use this, but it links cleanly so
  * dvi_scanbuf_main_8bpp / dvi_framebuf_main_8bpp work for

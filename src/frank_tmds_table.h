@@ -1,8 +1,9 @@
 /*
  * Pre-computed 256-entry TMDS encode lookup for the pixel-doubling
- * encoder. Each entry packs two 10-bit TMDS symbols into a uint32 — the
- * inner asm loop reads one entry per pair of pixels. Pinned in scratch_x
- * at runtime so reads never compete with framebuffer traffic.
+ * encoder.  Each entry packs two 10-bit TMDS symbols into a uint32;
+ * the inner asm loop reads one entry per pair of pixels.  Pinned in
+ * scratch_x at runtime so reads never compete with framebuffer
+ * traffic.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *

@@ -1,8 +1,8 @@
 /*
- * Implementation of the SPSC ring used between the producer and the HDMI
- * audio data-island packetiser. Power-of-two sized; head/tail are
- * managed without locks (the producer owns the write index, the consumer
- * owns the read index).
+ * SPSC ring used between the producer and the HDMI audio data-island
+ * packetiser.  Power-of-two sized; head and tail are managed without
+ * locks (the producer owns the write index, the consumer owns the
+ * read index).
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
@@ -19,10 +19,11 @@
 #include <hardware/sync.h>
 
 /*
- * Attach a backing buffer to the ring and reset its read/write
- * indices to zero.  `size` must be a power of two greater than 1 —
- * the rest of the ring uses bitwise AND with (size - 1) for wrap-
- * around, so non-power-of-two sizes silently corrupt the indexing.
+ * Attach a backing buffer to the ring and reset its read and write
+ * indices to zero.  `size` must be a power of two greater than 1.
+ * The rest of the ring uses bitwise AND with (size - 1) for
+ * wrap-around, so non-power-of-two sizes silently corrupt the
+ * indexing.
  */
 void audio_ring_set(audio_ring_t *audio_ring, audio_sample_t *buffer, uint32_t size) {
     assert(size > 1);
@@ -34,11 +35,11 @@ void audio_ring_set(audio_ring_t *audio_ring, audio_sample_t *buffer, uint32_t s
 
 /*
  * Number of frames the producer can safely write right now without
- * overtaking the consumer.  Pass `full=true` to allow the producer
- * to fill the buffer completely (size - 1 useful slots, since one
- * slot is reserved to disambiguate full vs empty).
+ * overtaking the consumer.  Pass `full=true` to let the producer
+ * fill the buffer completely (size - 1 useful slots, since one slot
+ * is reserved to disambiguate full vs empty).
  *
- * Use `full=true` from frank-hdmi-sound's audio writer — the
+ * Use `full=true` from frank-hdmi-sound's audio writer.  The
  * `full=false` branch over-reports free space when wp >= rp and
  * lets the producer corrupt samples the consumer hasn't read yet.
  */
@@ -54,7 +55,7 @@ uint32_t __not_in_flash_func(get_write_size)(audio_ring_t *audio_ring, bool full
 }
 
 /*
- * Mirror of get_write_size for the consumer side: how many frames
+ * Mirror of get_write_size for the consumer side.  How many frames
  * are available to read right now.
  */
 uint32_t __not_in_flash_func(get_read_size)(audio_ring_t *audio_ring, bool full) {

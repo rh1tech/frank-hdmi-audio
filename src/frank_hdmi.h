@@ -1,5 +1,5 @@
 /*
- * frank-hdmi-sound — minimal HDMI video + audio driver for RP2350.
+ * frank-hdmi-sound. Minimal HDMI video + audio driver for RP2350.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *
@@ -110,7 +110,7 @@ extern "C" {
  * Default video mode is 640x480p60 with libdvi's vertical-doubled
  * 320x240 logical canvas (each logical scanline drives two raster
  * lines).  The encoder is also pixel-doubling, so the source
- * framebuffer is 320 RGB565 pixels wide on the wire — but exposed to
+ * framebuffer is 320 RGB565 pixels wide on the wire, but exposed to
  * the caller as an 8-bit palette-indexed buffer up to 320x240.
  */
 #define FRANK_HDMI_FRAME_WIDTH    640
@@ -120,7 +120,7 @@ extern "C" {
 
 /*
  * Audio sample rate declared on the wire (CEA-861 standard rate).
- * The driver itself is rate-agnostic — the producer just calls
+ * The driver itself is rate-agnostic; the producer just calls
  * frank_hdmi_audio_write() at whatever rate it likes.  For minimal
  * drift the producer's actual rate should be close to this value;
  * 0.1 % drift is inaudible.
@@ -129,7 +129,7 @@ extern "C" {
 
 /*
  * Bring up HDMI on the configured pins.  Must be called before
- * frank_hdmi_run_core1().  Does NOT change the system clock — the
+ * frank_hdmi_run_core1().  Does NOT change the system clock; the
  * caller is responsible for setting sys_clock to a multiple of the
  * TMDS bit rate (252 MHz at 1x, 504 MHz at 2x; the libdvi build is
  * configured with DVI_SM_CLKDIV=2 by default).
@@ -179,7 +179,7 @@ uint32_t frank_hdmi_audio_free(void);
 /*
  * Diagnostic counters bumped by the Core 1 encode loop.  Useful for
  * a heartbeat from Core 0: if frames keeps incrementing at ~60/s the
- * encoder is alive.  Volatile reads only — no synchronisation.
+ * encoder is alive.  Volatile reads only, no synchronisation.
  */
 extern volatile uint32_t frank_hdmi_heartbeat_lines;
 extern volatile uint32_t frank_hdmi_heartbeat_frames;

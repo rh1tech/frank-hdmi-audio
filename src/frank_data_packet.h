@@ -1,7 +1,7 @@
 /*
- * Types and helpers for HDMI data-island packets — both InfoFrames (AVI,
- * audio) and the actual audio sample packets that ride in the horizontal
- * blanking interval of every scanline.
+ * Types and helpers for HDMI data-island packets.  Covers both
+ * InfoFrames (AVI, audio) and the actual audio sample packets that
+ * ride in the horizontal blanking interval of every scanline.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
  *

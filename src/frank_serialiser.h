@@ -1,5 +1,5 @@
 /*
- * Differential TMDS serialiser config — picks the PIO instance, state
+ * Differential TMDS serialiser config.  Picks the PIO instance, state
  * machine numbers and GPIO pin pairs that drive the three TMDS data
  * lanes plus the pixel clock.
  *

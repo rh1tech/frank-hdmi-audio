@@ -1,6 +1,6 @@
 /*
- * frank-hdmi-sound — DVI engine: dvi_inst state, init, IRQ wiring,
- * scanline / framebuffer worker entry points, and HDMI audio data-
+ * frank-hdmi-sound. DVI engine: dvi_inst state, init, IRQ wiring,
+ * scanline / framebuffer worker entry points, plus HDMI audio data-
  * island setup.
  *
  * (c) 2026 Mikhail Matveev <xtreme@rh1.tech>, https://rh1.tech
