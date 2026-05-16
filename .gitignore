@@ -1,0 +1,15 @@
+build/
+build-*/
+*.elf
+*.uf2
+*.bin
+*.dis
+*.map
+.cache/
+.vscode/
+.DS_Store
+compile_commands.json
+
+# Pre-built example binaries are checked in.
+!release/*.uf2
+!release/*.elf
