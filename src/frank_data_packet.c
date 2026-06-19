@@ -18,6 +18,9 @@
 #include <string.h>
 #include "pico/stdlib.h"
 
+/* Bumped whenever the audio ring underflows (consumer outran producer). */
+volatile uint32_t frank_hdmi_audio_underflows = 0;
+
 // Compute 8 Parity Start
 // Parity table is build statically with the following code
 // for (int i = 0; i < 256; ++i){v_[i] = (i ^ (i >> 1) ^ (i >> 2) ^ (i >> 3) ^ (i >> 4) ^ (i >> 5) ^ (i >> 6) ^ (i >> 7)) & 1;}
@@ -250,10 +253,18 @@ int  __not_in_flash_func(set_audio_sample)(data_packet_t *data_packet, audio_rin
             l = (*audio_sample_ptr).channels[0];
             r = (*audio_sample_ptr).channels[1];
             increase_read_pointer(audio_ring, 1);
+            audio_ring->last_l = l;
+            audio_ring->last_r = r;
         }
         else {
-            l = (int16_t)0;
-            r = (int16_t)0;
+            /* Underflow: the producer (BBC emulation on core 0) fell behind
+             * the HDMI audio clock and the ring drained empty.  Repeat the
+             * last sample (DC hold) as a last-resort fallback — but the real
+             * cure is the producer-side rate lock (see frank_perf_tick), which
+             * should keep this counter at zero in steady state. */
+            l = audio_ring->last_l;
+            r = audio_ring->last_r;
+            frank_hdmi_audio_underflows++;
         }
 
         const uint8_t vuc = 1; // valid

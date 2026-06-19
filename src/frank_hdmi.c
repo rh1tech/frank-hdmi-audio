@@ -59,6 +59,7 @@
 #include "frank_serialiser.h"
 #include "frank_dvi_config.h"
 #include "frank_audio_ring.h"
+#include "frank_queue_inline.h"   /* RAM-resident queue ops (no flash XIP) */
 
 /* ------------------------------------------------------------------ */
 /* PIO and pin configuration                                          */
@@ -103,14 +104,24 @@ static const struct dvi_serialiser_cfg frank_dvi_cfg = {
  * or PSRAM work and stalls Core 1 momentarily. */
 #define N_SCANLINE_BUFS     2
 
-/* CEA-861 N-value for 32 kHz. */
+/*
+ * HDMI audio Clock-Regeneration N value.  CEA-861 value for 32 kHz.
+ * For this board (f_pixel = 25.2 MHz, fs = 32000 Hz) it gives
+ * CTS = f_pixel*N/(128*fs) = 25200 exactly (0 ppm), so the sink's audio
+ * clock locks cleanly.  (frank-micro feeds 32000 Hz, resampled from the
+ * BBC's native 31250 Hz in the producer bridge.)
+ */
 #define HDMI_AUDIO_N        4096
 
 /* Power-of-two size for the data-island ring.  Producers typically
  * push in bursts of one chunk per video frame; the ring needs to
- * absorb at least one chunk plus a couple of catch-up bursts.  2048
- * frames = 8 KB and ~64 ms of buffering. */
-#define AUDIO_RING_FRAMES   2048
+ * absorb at least one chunk plus a couple of catch-up bursts.  It is
+ * primed half-full, so the usable drain headroom (the cushion against
+ * a producer that stalls mid-frame) is AUDIO_RING_FRAMES/2 samples.
+ * 4096 frames = 16 KB ≈ 131 ms total / 65 ms drain headroom @ 31.25 kHz. */
+#ifndef AUDIO_RING_FRAMES
+#define AUDIO_RING_FRAMES   4096
+#endif
 
 /* ------------------------------------------------------------------ */
 /* libdvi state and buffers                                           */
@@ -217,10 +228,10 @@ extern void tmds_encode_data_channel_16bpp(const uint32_t *pixbuf,
  */
 static void __not_in_flash_func(encode_one_scanline_16bpp)(struct dvi_inst *inst) {
     uint32_t *scanbuf = NULL;
-    queue_remove_blocking(&inst->q_colour_valid, &scanbuf);
+    queue_remove_blocking_u32(&inst->q_colour_valid, &scanbuf);
 
     uint32_t *tmdsbuf = NULL;
-    queue_remove_blocking(&inst->q_tmds_free, &tmdsbuf);
+    queue_remove_blocking_u32(&inst->q_tmds_free, &tmdsbuf);
     uint pixwidth       = inst->timing->h_active_pixels;
     uint words_per_chan = pixwidth / DVI_SYMBOLS_PER_WORD;
     tmds_encode_data_channel_16bpp(scanbuf, tmdsbuf + 0 * words_per_chan,
@@ -232,9 +243,9 @@ static void __not_in_flash_func(encode_one_scanline_16bpp)(struct dvi_inst *inst
     tmds_encode_data_channel_16bpp(scanbuf, tmdsbuf + 2 * words_per_chan,
                                    pixwidth / 2,
                                    DVI_16BPP_RED_MSB,   DVI_16BPP_RED_LSB);
-    queue_add_blocking(&inst->q_tmds_valid, &tmdsbuf);
+    queue_add_blocking_u32(&inst->q_tmds_valid, &tmdsbuf);
 
-    queue_add_blocking(&inst->q_colour_free, &scanbuf);
+    queue_add_blocking_u32(&inst->q_colour_free, &scanbuf);
 }
 
 /*
@@ -258,24 +269,39 @@ volatile uint32_t frank_hdmi_heartbeat_lines = 0;
 volatile uint32_t frank_hdmi_heartbeat_frames = 0;
 
 static void __not_in_flash_func(core1_main)(void) {
+    /* Enable this core's FPU (CP10/CP11). The custom fast-boot path skips the
+     * SDK per-core coprocessor init, and GCC emits VFP spills (e.g. vpush {d8})
+     * in ordinary code; executing those with the FPU off HardFaults the core. */
+    do {
+        volatile uint32_t* cpacr = (volatile uint32_t*)0xE000ED88u;
+        *cpacr |= (0x3u << 20) | (0x3u << 22);
+        __asm volatile("dsb");
+        __asm volatile("isb");
+    } while (0);
+
     dvi_register_irqs_this_core(&dvi0, DMA_IRQ_1);
 
     for (int i = 0; i < N_SCANLINE_BUFS; ++i) {
         uint16_t *scanbuf = NULL;
-        queue_remove_blocking(&dvi0.q_colour_free, &scanbuf);
+        queue_remove_blocking_u32(&dvi0.q_colour_free, &scanbuf);
         fill_scanline(scanbuf, i);
-        queue_add_blocking(&dvi0.q_colour_valid, &scanbuf);
+        queue_add_blocking_u32(&dvi0.q_colour_valid, &scanbuf);
         encode_one_scanline_16bpp(&dvi0);
     }
 
     dvi_start(&dvi0);
 
-    int logical_y = 0;
+    /* The prefill loop above already queued N_SCANLINE_BUFS buffers filled
+     * with logical_y 0..N-1, so the producer must continue from there.
+     * Restarting at 0 here would leave the producer N lines behind the DVI
+     * consumer, rolling the whole image down by N scanlines (the bottom N
+     * rows wrapping to the top). */
+    int logical_y = N_SCANLINE_BUFS % LOGICAL_H;
     while (1) {
         uint16_t *scanbuf = NULL;
-        queue_remove_blocking(&dvi0.q_colour_free, &scanbuf);
+        queue_remove_blocking_u32(&dvi0.q_colour_free, &scanbuf);
         fill_scanline(scanbuf, logical_y);
-        queue_add_blocking(&dvi0.q_colour_valid, &scanbuf);
+        queue_add_blocking_u32(&dvi0.q_colour_valid, &scanbuf);
 
         encode_one_scanline_16bpp(&dvi0);
 
@@ -337,8 +363,14 @@ void frank_hdmi_init(void) {
      */
     set_write_offset(&dvi0.audio_ring, AUDIO_RING_FRAMES >> 1);
 
-    int cts = DVI_TIMING_PRESET.bit_clk_khz * HDMI_AUDIO_N
-            / (FRANK_HDMI_AUDIO_RATE / 100) / 128;
+    /*
+     * Audio data-island setup.  CTS = f_pixel * N / (128 * fs), computed
+     * in 64-bit with round-to-nearest so there is no truncation error.
+     * f_pixel = bit_clk_khz * 100 (Hz).  For N = 4000 this is exactly 25200.
+     */
+    uint64_t pixel_hz = (uint64_t)DVI_TIMING_PRESET.bit_clk_khz * 100u;
+    uint64_t denom    = 128ull * (uint64_t)FRANK_HDMI_AUDIO_RATE;
+    int cts = (int)((pixel_hz * (uint64_t)HDMI_AUDIO_N + denom / 2u) / denom);
     dvi_set_audio_freq(&dvi0, FRANK_HDMI_AUDIO_RATE, cts, HDMI_AUDIO_N);
 
     /*
@@ -379,6 +411,16 @@ uint32_t frank_hdmi_audio_free(void) {
      * yet, audible as glitches and discontinuities mid-waveform.
      */
     return get_write_size(&dvi0.audio_ring, true);
+}
+
+uint32_t frank_hdmi_audio_capacity(void) {
+    return AUDIO_RING_FRAMES;
+}
+
+uint32_t frank_hdmi_audio_fill(void) {
+    uint32_t cap  = AUDIO_RING_FRAMES;
+    uint32_t free = get_write_size(&dvi0.audio_ring, true);
+    return (free <= cap) ? (cap - free) : 0;
 }
 
 uint32_t __not_in_flash_func(frank_hdmi_audio_write)(const int16_t *frames_lr,

@@ -32,7 +32,9 @@ typedef struct audio_ring {
     audio_sample_t    *buffer;
     uint32_t          size;
     volatile uint32_t read;
-    volatile uint32_t write; 
+    volatile uint32_t write;
+    int16_t           last_l;   /* last consumed sample, held on underflow */
+    int16_t           last_r;
 } audio_ring_t;
 
 inline audio_sample_t *get_buffer_top(audio_ring_t *audio_ring)    { return audio_ring->buffer; }
